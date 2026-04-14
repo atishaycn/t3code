@@ -103,7 +103,7 @@ type InstallProviderSettings = {
   title: string;
   binaryPlaceholder: string;
   binaryDescription: ReactNode;
-  homePathKey?: "codexHomePath";
+  homePathLabel?: string;
   homePlaceholder?: string;
   homeDescription?: ReactNode;
 };
@@ -114,9 +114,18 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     title: "Codex",
     binaryPlaceholder: "Codex binary path",
     binaryDescription: "Path to the Codex binary",
-    homePathKey: "codexHomePath",
+    homePathLabel: "CODEX_HOME path",
     homePlaceholder: "CODEX_HOME",
     homeDescription: "Optional custom Codex home and config directory.",
+  },
+  {
+    provider: "pi",
+    title: "Pi",
+    binaryPlaceholder: "Pi launcher path",
+    binaryDescription: "Path to the Pi RPC launcher",
+    homePathLabel: "PI_CODING_AGENT_DIR path",
+    homePlaceholder: "PI_CODING_AGENT_DIR",
+    homeDescription: "Optional custom Pi agent home and config directory.",
   },
   {
     provider: "claudeAgent",
@@ -152,7 +161,7 @@ function getProviderSummary(provider: ServerProvider | undefined) {
     return {
       headline: "Disabled",
       detail:
-        provider.message ?? "This provider is installed but disabled for new sessions in T3 Code.",
+        provider.message ?? "This provider is installed but disabled for new sessions in MyCode.",
     };
   }
   if (!provider.installed) {
@@ -437,6 +446,11 @@ export function GeneralSettingsPanel() {
       settings.providers.codex.homePath !== DEFAULT_UNIFIED_SETTINGS.providers.codex.homePath ||
       settings.providers.codex.customModels.length > 0,
     ),
+    pi: Boolean(
+      settings.providers.pi.binaryPath !== DEFAULT_UNIFIED_SETTINGS.providers.pi.binaryPath ||
+      settings.providers.pi.homePath !== DEFAULT_UNIFIED_SETTINGS.providers.pi.homePath ||
+      settings.providers.pi.customModels.length > 0,
+    ),
     claudeAgent: Boolean(
       settings.providers.claudeAgent.binaryPath !==
         DEFAULT_UNIFIED_SETTINGS.providers.claudeAgent.binaryPath ||
@@ -447,6 +461,7 @@ export function GeneralSettingsPanel() {
     Record<ProviderKind, string>
   >({
     codex: "",
+    pi: "",
     claudeAgent: "",
   });
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
@@ -474,7 +489,10 @@ export function GeneralSettingsPanel() {
   const availableEditors = useServerAvailableEditors();
   const observability = useServerObservability();
   const serverProviders = useServerProviders();
-  const codexHomePath = settings.providers.codex.homePath;
+  const providerHomePathByProvider: Partial<Record<ProviderKind, string>> = {
+    codex: settings.providers.codex.homePath,
+    pi: settings.providers.pi.homePath,
+  };
   const logsDirectoryPath = observability?.logsDirectoryPath ?? null;
   const diagnosticsDescription = (() => {
     const exports: string[] = [];
@@ -488,13 +506,19 @@ export function GeneralSettingsPanel() {
     return exports.length > 0 ? `${mode}. OTLP exporting ${exports.join(" and ")}.` : `${mode}.`;
   })();
 
-  const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
+  const gitTextGenerationProviders = serverProviders.filter(
+    (provider) => provider.provider !== "pi",
+  );
+  const textGenerationModelSelection = resolveAppModelSelectionState(
+    settings,
+    gitTextGenerationProviders,
+  );
   const textGenProvider = textGenerationModelSelection.provider;
   const textGenModel = textGenerationModelSelection.model;
   const textGenModelOptions = textGenerationModelSelection.options;
   const gitModelOptionsByProvider = getCustomModelOptionsByProvider(
     settings,
-    serverProviders,
+    gitTextGenerationProviders,
     textGenProvider,
     textGenModel,
   );
@@ -660,7 +684,7 @@ export function GeneralSettingsPanel() {
       title: providerSettings.title,
       binaryPlaceholder: providerSettings.binaryPlaceholder,
       binaryDescription: providerSettings.binaryDescription,
-      homePathKey: providerSettings.homePathKey,
+      homePathLabel: providerSettings.homePathLabel,
       homePlaceholder: providerSettings.homePlaceholder,
       homeDescription: providerSettings.homeDescription,
       binaryPathValue: providerConfig.binaryPath,
@@ -687,7 +711,7 @@ export function GeneralSettingsPanel() {
       <SettingsSection title="General">
         <SettingsRow
           title="Theme"
-          description="Choose how T3 Code looks across the app."
+          description="Choose how MyCode looks across the app."
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />
@@ -926,7 +950,7 @@ export function GeneralSettingsPanel() {
                 provider={textGenProvider}
                 model={textGenModel}
                 lockedProvider={null}
-                providers={serverProviders}
+                providers={gitTextGenerationProviders}
                 modelOptionsByProvider={gitModelOptionsByProvider}
                 triggerVariant="outline"
                 triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
@@ -937,7 +961,7 @@ export function GeneralSettingsPanel() {
                         ...settings,
                         textGenerationModelSelection: { provider, model },
                       },
-                      serverProviders,
+                      gitTextGenerationProviders,
                     ),
                   });
                 }}
@@ -945,8 +969,9 @@ export function GeneralSettingsPanel() {
               <TraitsPicker
                 provider={textGenProvider}
                 models={
-                  serverProviders.find((provider) => provider.provider === textGenProvider)
-                    ?.models ?? []
+                  gitTextGenerationProviders.find(
+                    (provider) => provider.provider === textGenProvider,
+                  )?.models ?? []
                 }
                 model={textGenModel}
                 prompt=""
@@ -966,7 +991,7 @@ export function GeneralSettingsPanel() {
                           ...(nextOptions ? { options: nextOptions } : {}),
                         },
                       },
-                      serverProviders,
+                      gitTextGenerationProviders,
                     ),
                   });
                 }}
@@ -1143,25 +1168,25 @@ export function GeneralSettingsPanel() {
                       </label>
                     </div>
 
-                    {providerCard.homePathKey ? (
+                    {providerCard.homePathLabel ? (
                       <div className="border-t border-border/60 px-4 py-3 sm:px-5">
                         <label
-                          htmlFor={`provider-install-${providerCard.homePathKey}`}
+                          htmlFor={`provider-install-${providerCard.provider}-home-path`}
                           className="block"
                         >
                           <span className="text-xs font-medium text-foreground">
-                            CODEX_HOME path
+                            {providerCard.homePathLabel}
                           </span>
                           <Input
-                            id={`provider-install-${providerCard.homePathKey}`}
+                            id={`provider-install-${providerCard.provider}-home-path`}
                             className="mt-1.5"
-                            value={codexHomePath}
+                            value={providerHomePathByProvider[providerCard.provider] ?? ""}
                             onChange={(event) =>
                               updateSettings({
                                 providers: {
                                   ...settings.providers,
-                                  codex: {
-                                    ...settings.providers.codex,
+                                  [providerCard.provider]: {
+                                    ...settings.providers[providerCard.provider],
                                     homePath: event.target.value,
                                   },
                                 },
@@ -1291,7 +1316,9 @@ export function GeneralSettingsPanel() {
                           placeholder={
                             providerCard.provider === "codex"
                               ? "gpt-6.7-codex-ultra-preview"
-                              : "claude-sonnet-5-0"
+                              : providerCard.provider === "pi"
+                                ? "openai/gpt-5"
+                                : "claude-sonnet-5-0"
                           }
                           spellCheck={false}
                         />

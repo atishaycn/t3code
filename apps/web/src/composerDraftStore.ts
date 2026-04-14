@@ -528,7 +528,7 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
 }
 
 function normalizeProviderKind(value: unknown): ProviderKind | null {
-  return value === "codex" || value === "claudeAgent" ? value : null;
+  return value === "codex" || value === "pi" || value === "claudeAgent" ? value : null;
 }
 
 function normalizeProviderModelOptions(
@@ -538,9 +538,13 @@ function normalizeProviderModelOptions(
 ): ProviderModelOptions | null {
   const candidate = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
   const codexCandidate =
-    candidate?.codex && typeof candidate.codex === "object"
-      ? (candidate.codex as Record<string, unknown>)
-      : null;
+    provider === "pi"
+      ? candidate?.pi && typeof candidate.pi === "object"
+        ? (candidate.pi as Record<string, unknown>)
+        : null
+      : candidate?.codex && typeof candidate.codex === "object"
+        ? (candidate.codex as Record<string, unknown>)
+        : null;
   const claudeCandidate =
     candidate?.claudeAgent && typeof candidate.claudeAgent === "object"
       ? (candidate.claudeAgent as Record<string, unknown>)
@@ -552,7 +556,7 @@ function normalizeProviderModelOptions(
     codexCandidate?.reasoningEffort === "high" ||
     codexCandidate?.reasoningEffort === "xhigh"
       ? codexCandidate.reasoningEffort
-      : provider === "codex" &&
+      : (provider === "codex" || provider === "pi") &&
           (legacy?.effort === "low" ||
             legacy?.effort === "medium" ||
             legacy?.effort === "high" ||
@@ -564,7 +568,7 @@ function normalizeProviderModelOptions(
       ? true
       : codexCandidate?.fastMode === false
         ? false
-        : (provider === "codex" && legacy?.codexFastMode === true) ||
+        : ((provider === "codex" || provider === "pi") && legacy?.codexFastMode === true) ||
             (typeof legacy?.serviceTier === "string" && legacy.serviceTier === "fast")
           ? true
           : undefined;
@@ -617,7 +621,7 @@ function normalizeProviderModelOptions(
     return null;
   }
   return {
-    ...(codex ? { codex } : {}),
+    ...(codex ? { [provider === "pi" ? "pi" : "codex"]: codex } : {}),
     ...(claude ? { claudeAgent: claude } : {}),
   };
 }
@@ -647,9 +651,14 @@ function normalizeModelSelection(
   const modelOptions = normalizeProviderModelOptions(
     candidate?.options ? { [provider]: candidate.options } : legacy?.modelOptions,
     provider,
-    provider === "codex" ? legacy?.legacyCodex : undefined,
+    provider === "claudeAgent" ? undefined : legacy?.legacyCodex,
   );
-  const options = provider === "codex" ? modelOptions?.codex : modelOptions?.claudeAgent;
+  const options =
+    provider === "claudeAgent"
+      ? modelOptions?.claudeAgent
+      : provider === "pi"
+        ? modelOptions?.pi
+        : modelOptions?.codex;
   return {
     provider,
     model,
@@ -715,7 +724,7 @@ function legacyToModelSelectionByProvider(
   const result: Partial<Record<ProviderKind, ModelSelection>> = {};
   // Add entries from the options bag (for non-active providers)
   if (modelOptions) {
-    for (const provider of ["codex", "claudeAgent"] as const) {
+    for (const provider of ["codex", "pi", "claudeAgent"] as const) {
       const options = modelOptions[provider];
       if (options && Object.keys(options).length > 0) {
         result[provider] = {
@@ -2258,7 +2267,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             }
             const base = existing ?? createEmptyThreadDraft();
             const nextMap = { ...base.modelSelectionByProvider };
-            for (const provider of ["codex", "claudeAgent"] as const) {
+            for (const provider of ["codex", "pi", "claudeAgent"] as const) {
               // Only touch providers explicitly present in the input
               if (!normalizedOpts || !(provider in normalizedOpts)) continue;
               const opts = normalizedOpts[provider];

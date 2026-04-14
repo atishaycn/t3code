@@ -33,6 +33,10 @@ import { getProviderModelCapabilities } from "../../providerModels";
 import { cn } from "~/lib/utils";
 
 type ProviderOptions = ProviderModelOptions[ProviderKind];
+
+function usesCodexStyleOptions(provider: ProviderKind): boolean {
+  return provider !== "claudeAgent";
+}
 type TraitsPersistence =
   | {
       threadRef?: ScopedThreadRef;
@@ -50,7 +54,7 @@ function getRawEffort(
   provider: ProviderKind,
   modelOptions: ProviderOptions | null | undefined,
 ): string | null {
-  if (provider === "codex") {
+  if (usesCodexStyleOptions(provider)) {
     return trimOrNull((modelOptions as CodexModelOptions | undefined)?.reasoningEffort);
   }
   return trimOrNull((modelOptions as ClaudeModelOptions | undefined)?.effort);
@@ -71,7 +75,7 @@ function buildNextOptions(
   modelOptions: ProviderOptions | null | undefined,
   patch: Record<string, unknown>,
 ): ProviderOptions {
-  if (provider === "codex") {
+  if (usesCodexStyleOptions(provider)) {
     return { ...(modelOptions as CodexModelOptions | undefined), ...patch } as CodexModelOptions;
   }
   return { ...(modelOptions as ClaudeModelOptions | undefined), ...patch } as ClaudeModelOptions;
@@ -210,7 +214,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
         const stripped = prompt.replace(/^Ultrathink:\s*/i, "");
         onPromptChange(stripped);
       }
-      const effortKey = provider === "codex" ? "reasoningEffort" : "effort";
+      const effortKey = usesCodexStyleOptions(provider) ? "reasoningEffort" : "effort";
       updateModelOptions(
         buildNextOptions(provider, modelOptions, { [effortKey]: nextOption.value }),
       );
@@ -372,7 +376,7 @@ export const TraitsPicker = memo(function TraitsPicker({
     .filter(Boolean)
     .join(" · ");
 
-  const isCodexStyle = provider === "codex";
+  const isCodexStyle = usesCodexStyleOptions(provider);
 
   return (
     <Menu

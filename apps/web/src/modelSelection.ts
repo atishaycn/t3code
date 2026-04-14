@@ -38,6 +38,13 @@ const PROVIDER_CUSTOM_MODEL_CONFIG: Record<ProviderKind, ProviderCustomModelConf
     placeholder: "your-codex-model-slug",
     example: "gpt-6.7-codex-ultra-preview",
   },
+  pi: {
+    provider: "pi",
+    title: "Pi",
+    description: "Save additional Pi model slugs for the picker and `/model` command.",
+    placeholder: "your-pi-model-slug",
+    example: "openai/gpt-5",
+  },
   claudeAgent: {
     provider: "claudeAgent",
     title: "Claude",
@@ -158,6 +165,12 @@ export function getCustomModelOptionsByProvider(
       providers,
       "codex",
       selectedProvider === "codex" ? selectedModel : undefined,
+    ),
+    pi: getAppModelOptions(
+      settings,
+      providers,
+      "pi",
+      selectedProvider === "pi" ? selectedModel : undefined,
     ),
     claudeAgent: getAppModelOptions(
       settings,

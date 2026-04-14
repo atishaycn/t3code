@@ -32,6 +32,7 @@ function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): o
 
 const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   codex: OpenAI,
+  pi: OpenCodeIcon,
   claudeAgent: ClaudeAI,
   cursor: CursorIcon,
 };

@@ -9,10 +9,13 @@ import { Effect, Equal, FileSystem, Layer, Path, PubSub, Ref, Stream } from "eff
 import { ServerConfig } from "../../config";
 import { ClaudeProviderLive } from "./ClaudeProvider";
 import { CodexProviderLive } from "./CodexProvider";
+import { PiProviderLive } from "./PiProvider";
 import type { ClaudeProviderShape } from "../Services/ClaudeProvider";
 import { ClaudeProvider } from "../Services/ClaudeProvider";
 import type { CodexProviderShape } from "../Services/CodexProvider";
 import { CodexProvider } from "../Services/CodexProvider";
+import type { PiProviderShape } from "../Services/PiProvider";
+import { PiProvider } from "../Services/PiProvider";
 import { ProviderRegistry, type ProviderRegistryShape } from "../Services/ProviderRegistry";
 import {
   hydrateCachedProvider,
@@ -25,9 +28,10 @@ import {
 
 const loadProviders = (
   codexProvider: CodexProviderShape,
+  piProvider: PiProviderShape,
   claudeProvider: ClaudeProviderShape,
-): Effect.Effect<readonly [ServerProvider, ServerProvider]> =>
-  Effect.all([codexProvider.getSnapshot, claudeProvider.getSnapshot], {
+): Effect.Effect<ReadonlyArray<ServerProvider>> =>
+  Effect.all([codexProvider.getSnapshot, piProvider.getSnapshot, claudeProvider.getSnapshot], {
     concurrency: "unbounded",
   });
 
@@ -40,6 +44,7 @@ export const ProviderRegistryLive = Layer.effect(
   ProviderRegistry,
   Effect.gen(function* () {
     const codexProvider = yield* CodexProvider;
+    const piProvider = yield* PiProvider;
     const claudeProvider = yield* ClaudeProvider;
     const config = yield* ServerConfig;
     const fileSystem = yield* FileSystem.FileSystem;
@@ -48,7 +53,7 @@ export const ProviderRegistryLive = Layer.effect(
       PubSub.unbounded<ReadonlyArray<ServerProvider>>(),
       PubSub.shutdown,
     );
-    const fallbackProviders = yield* loadProviders(codexProvider, claudeProvider);
+    const fallbackProviders = yield* loadProviders(codexProvider, piProvider, claudeProvider);
     const cachePathByProvider = new Map(
       PROVIDER_CACHE_IDS.map(
         (provider) =>
@@ -152,6 +157,10 @@ export const ProviderRegistryLive = Layer.effect(
           return yield* codexProvider.refresh.pipe(
             Effect.flatMap((nextProvider) => syncProvider(nextProvider)),
           );
+        case "pi":
+          return yield* piProvider.refresh.pipe(
+            Effect.flatMap((nextProvider) => syncProvider(nextProvider)),
+          );
         case "claudeAgent":
           return yield* claudeProvider.refresh.pipe(
             Effect.flatMap((nextProvider) => syncProvider(nextProvider)),
@@ -162,6 +171,7 @@ export const ProviderRegistryLive = Layer.effect(
               codexProvider.refresh.pipe(
                 Effect.flatMap((nextProvider) => syncProvider(nextProvider)),
               ),
+              piProvider.refresh.pipe(Effect.flatMap((nextProvider) => syncProvider(nextProvider))),
               claudeProvider.refresh.pipe(
                 Effect.flatMap((nextProvider) => syncProvider(nextProvider)),
               ),
@@ -177,6 +187,9 @@ export const ProviderRegistryLive = Layer.effect(
     yield* Stream.runForEach(codexProvider.streamChanges, (provider) =>
       syncProvider(provider),
     ).pipe(Effect.forkScoped);
+    yield* Stream.runForEach(piProvider.streamChanges, (provider) => syncProvider(provider)).pipe(
+      Effect.forkScoped,
+    );
     yield* Stream.runForEach(claudeProvider.streamChanges, (provider) =>
       syncProvider(provider),
     ).pipe(Effect.forkScoped);
@@ -193,4 +206,8 @@ export const ProviderRegistryLive = Layer.effect(
       },
     } satisfies ProviderRegistryShape;
   }),
-).pipe(Layer.provideMerge(CodexProviderLive), Layer.provideMerge(ClaudeProviderLive));
+).pipe(
+  Layer.provideMerge(CodexProviderLive),
+  Layer.provideMerge(PiProviderLive),
+  Layer.provideMerge(ClaudeProviderLive),
+);

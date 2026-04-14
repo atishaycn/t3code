@@ -98,6 +98,14 @@ function createBaseServerConfig(): ServerConfig {
       textGenerationModelSelection: { provider: "codex" as const, model: "gpt-5.4-mini" },
       providers: {
         codex: { enabled: true, binaryPath: "", homePath: "", customModels: [] },
+        pi: {
+          enabled: true,
+          binaryPath: "",
+          homePath: "",
+          enableAutoreason: false,
+          fullAutonomy: false,
+          customModels: [],
+        },
         claudeAgent: { enabled: true, binaryPath: "", customModels: [] },
       },
     },
