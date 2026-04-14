@@ -1014,4 +1014,32 @@ describe("incremental orchestration updates", () => {
     });
     expect(threadsOf(next)[0]?.latestTurn?.sourceProposedPlan).toBeUndefined();
   });
+
+  it("preserves pi as the thread session provider", () => {
+    const thread = makeThread({
+      modelSelection: {
+        provider: "pi",
+        model: "default",
+      },
+    });
+
+    const next = applyOrchestrationEvent(
+      makeState(thread),
+      makeEvent("thread.session-set", {
+        threadId: thread.id,
+        session: {
+          threadId: thread.id,
+          status: "running",
+          providerName: "pi",
+          runtimeMode: "full-access",
+          activeTurnId: TurnId.make("turn-pi"),
+          lastError: null,
+          updatedAt: "2026-02-27T00:00:04.000Z",
+        },
+      }),
+      localEnvironmentId,
+    );
+
+    expect(threadsOf(next)[0]?.session?.provider).toBe("pi");
+  });
 });
