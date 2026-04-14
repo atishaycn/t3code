@@ -72,6 +72,7 @@ function createThreadControlHarness() {
       threadId: "thread_1",
       runtimeMode: "full-access",
       model: "gpt-5.3-codex",
+      activeTurnId: undefined,
       resumeCursor: { threadId: "thread_1" },
       createdAt: "2026-02-10T00:00:00.000Z",
       updatedAt: "2026-02-10T00:00:00.000Z",
@@ -203,6 +204,33 @@ describe("classifyCodexStderrLine", () => {
     const line = "fatal: permission denied";
     expect(classifyCodexStderrLine(line)).toEqual({
       message: line,
+    });
+  });
+});
+
+describe("interruptTurn", () => {
+  it("falls back to stopping the session when Codex turn ids are not available yet", async () => {
+    const { manager, sendRequest } = createThreadControlHarness();
+    const stopSession = vi
+      .spyOn(manager as unknown as { stopSession: (threadId: ThreadId) => void }, "stopSession")
+      .mockImplementation(() => {});
+
+    await manager.interruptTurn(asThreadId("thread_1"));
+
+    expect(sendRequest).not.toHaveBeenCalled();
+    expect(stopSession).toHaveBeenCalledWith(asThreadId("thread_1"));
+  });
+
+  it("sends turn/interrupt when the active turn is known", async () => {
+    const { manager, context, sendRequest } = createThreadControlHarness();
+    ((context.session as unknown) as { activeTurnId?: string }).activeTurnId = "turn_1";
+    sendRequest.mockResolvedValue({ ok: true });
+
+    await manager.interruptTurn(asThreadId("thread_1"));
+
+    expect(sendRequest).toHaveBeenCalledWith(context, "turn/interrupt", {
+      threadId: "thread_1",
+      turnId: "turn_1",
     });
   });
 });

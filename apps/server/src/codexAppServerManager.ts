@@ -768,6 +768,11 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
       resumeCursor: context.session.resumeCursor,
     });
     if (!effectiveTurnId || !providerThreadId) {
+      // The UI can surface a running session slightly before Codex exposes the
+      // provider turn/thread ids required for turn/interrupt. In that window,
+      // falling back to a full session stop is better than silently ignoring
+      // the user's stop action.
+      this.stopSession(threadId);
       return;
     }
 
