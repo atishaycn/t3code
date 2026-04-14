@@ -78,6 +78,7 @@ import {
   buildPlanImplementationPrompt,
   resolvePlanFollowUpSubmission,
 } from "../proposedPlan";
+import { buildForkChatPrompt, buildForkChatThreadTitle } from "../forkChat";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -160,6 +161,7 @@ import {
   revokeBlobPreviewUrl,
   revokeUserMessagePreviewUrls,
   shouldWriteThreadErrorToCurrentServerThread,
+  threadHasStarted,
   waitForStartedServerThread,
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -1129,6 +1131,16 @@ export default function ChatView(props: ChatViewProps) {
     threadError: activeThread?.error,
   });
   const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const forkChatDisabledReason = !isServerThread
+    ? "Forking is unavailable until this draft thread is created."
+    : !threadHasStarted(activeThread)
+      ? "Send at least one message before forking this chat."
+      : isConnecting
+        ? "Wait for the connection to recover before forking this chat."
+        : isWorking
+          ? "Wait for the current turn to finish before forking this chat."
+          : "Fork chat";
+  const canForkChat = forkChatDisabledReason === "Fork chat";
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -2947,6 +2959,117 @@ export default function ChatView(props: ChatViewProps) {
     ],
   );
 
+  const onForkChat = useCallback(async () => {
+    const api = readEnvironmentApi(environmentId);
+    if (!api || !activeThread || !activeProject || !isServerThread || !canForkChat) {
+      return;
+    }
+
+    const sendCtx = composerRef.current?.getSendContext();
+    if (!sendCtx) {
+      return;
+    }
+    const {
+      selectedProvider: ctxSelectedProvider,
+      selectedModel: ctxSelectedModel,
+      selectedProviderModels: ctxSelectedProviderModels,
+      selectedPromptEffort: ctxSelectedPromptEffort,
+      selectedModelSelection: ctxSelectedModelSelection,
+    } = sendCtx;
+
+    const createdAt = new Date().toISOString();
+    const nextThreadId = newThreadId();
+    const nextThreadTitle = buildForkChatThreadTitle(activeThread.title);
+    const outgoingForkPrompt = formatOutgoingPrompt({
+      provider: ctxSelectedProvider,
+      model: ctxSelectedModel,
+      models: ctxSelectedProviderModels,
+      effort: ctxSelectedPromptEffort,
+      text: buildForkChatPrompt(activeThread),
+    });
+    const nextThreadModelSelection: ModelSelection = ctxSelectedModelSelection;
+
+    sendInFlightRef.current = true;
+    beginLocalDispatch({ preparingWorktree: false });
+    const finish = () => {
+      sendInFlightRef.current = false;
+      resetLocalDispatch();
+    };
+
+    await api.orchestration
+      .dispatchCommand({
+        type: "thread.create",
+        commandId: newCommandId(),
+        threadId: nextThreadId,
+        projectId: activeProject.id,
+        title: nextThreadTitle,
+        modelSelection: nextThreadModelSelection,
+        runtimeMode,
+        interactionMode,
+        branch: activeThreadBranch,
+        worktreePath: activeThread.worktreePath,
+        createdAt,
+      })
+      .then(() => {
+        return api.orchestration.dispatchCommand({
+          type: "thread.turn.start",
+          commandId: newCommandId(),
+          threadId: nextThreadId,
+          message: {
+            messageId: newMessageId(),
+            role: "user",
+            text: outgoingForkPrompt,
+            attachments: [],
+          },
+          modelSelection: ctxSelectedModelSelection,
+          titleSeed: nextThreadTitle,
+          runtimeMode,
+          interactionMode,
+          createdAt,
+        });
+      })
+      .then(() => {
+        return waitForStartedServerThread(scopeThreadRef(activeThread.environmentId, nextThreadId));
+      })
+      .then(() => {
+        return navigate({
+          to: "/$environmentId/$threadId",
+          params: {
+            environmentId: activeThread.environmentId,
+            threadId: nextThreadId,
+          },
+        });
+      })
+      .catch(async (err: unknown) => {
+        await api.orchestration
+          .dispatchCommand({
+            type: "thread.delete",
+            commandId: newCommandId(),
+            threadId: nextThreadId,
+          })
+          .catch(() => undefined);
+        toastManager.add({
+          type: "error",
+          title: "Could not fork chat",
+          description:
+            err instanceof Error ? err.message : "An error occurred while forking the chat.",
+        });
+      })
+      .then(finish, finish);
+  }, [
+    activeProject,
+    activeThreadBranch,
+    activeThread,
+    beginLocalDispatch,
+    canForkChat,
+    environmentId,
+    interactionMode,
+    isServerThread,
+    navigate,
+    resetLocalDispatch,
+    runtimeMode,
+  ]);
+
   const onImplementPlanInNewThread = useCallback(async () => {
     const api = readEnvironmentApi(environmentId);
     if (
@@ -3216,10 +3339,13 @@ export default function ChatView(props: ChatViewProps) {
           diffToggleShortcutLabel={diffPanelShortcutLabel}
           gitCwd={gitCwd}
           diffOpen={diffOpen}
+          forkDisabled={!canForkChat}
+          forkDisabledReason={forkChatDisabledReason}
           onRunProjectScript={runProjectScript}
           onAddProjectScript={saveProjectScript}
           onUpdateProjectScript={updateProjectScript}
           onDeleteProjectScript={deleteProjectScript}
+          onForkChat={() => void onForkChat()}
           onToggleTerminal={toggleTerminalVisibility}
           onToggleDiff={onToggleDiff}
         />
