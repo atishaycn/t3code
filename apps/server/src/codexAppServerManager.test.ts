@@ -223,7 +223,7 @@ describe("interruptTurn", () => {
 
   it("sends turn/interrupt when the active turn is known", async () => {
     const { manager, context, sendRequest } = createThreadControlHarness();
-    ((context.session as unknown) as { activeTurnId?: string }).activeTurnId = "turn_1";
+    (context.session as unknown as { activeTurnId?: string }).activeTurnId = "turn_1";
     sendRequest.mockResolvedValue({ ok: true });
 
     await manager.interruptTurn(asThreadId("thread_1"));

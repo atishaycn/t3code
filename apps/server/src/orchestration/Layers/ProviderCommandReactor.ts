@@ -4,6 +4,7 @@ import {
   EventId,
   type ModelSelection,
   type OrchestrationEvent,
+  type IsoDateTime,
   ProviderKind,
   type OrchestrationSession,
   ThreadId,
@@ -586,6 +587,32 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const stopThreadSession = Effect.fn("stopThreadSession")(function* (
+    thread: {
+      readonly id: ThreadId;
+      readonly session: OrchestrationSession | null;
+    },
+    createdAt: IsoDateTime,
+  ) {
+    if (thread.session && thread.session.status !== "stopped") {
+      yield* providerService.stopSession({ threadId: thread.id });
+    }
+
+    yield* setThreadSession({
+      threadId: thread.id,
+      session: {
+        threadId: thread.id,
+        status: "stopped",
+        providerName: thread.session?.providerName ?? null,
+        runtimeMode: thread.session?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+        activeTurnId: null,
+        lastError: thread.session?.lastError ?? null,
+        updatedAt: createdAt,
+      },
+      createdAt,
+    });
+  });
+
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-interrupt-requested" }>,
   ) {
@@ -603,6 +630,10 @@ const make = Effect.gen(function* () {
         turnId: event.payload.turnId ?? null,
         createdAt: event.payload.createdAt,
       });
+    }
+
+    if (thread.session.providerName === "pi") {
+      return yield* stopThreadSession(thread, event.payload.createdAt);
     }
 
     // Orchestration turn ids are not provider turn ids, so interrupt by session.
@@ -709,24 +740,7 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    const now = event.payload.createdAt;
-    if (thread.session && thread.session.status !== "stopped") {
-      yield* providerService.stopSession({ threadId: thread.id });
-    }
-
-    yield* setThreadSession({
-      threadId: thread.id,
-      session: {
-        threadId: thread.id,
-        status: "stopped",
-        providerName: thread.session?.providerName ?? null,
-        runtimeMode: thread.session?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
-        activeTurnId: null,
-        lastError: thread.session?.lastError ?? null,
-        updatedAt: now,
-      },
-      createdAt: now,
-    });
+    yield* stopThreadSession(thread, event.payload.createdAt);
   });
 
   const processDomainEvent = Effect.fn("processDomainEvent")(function* (
