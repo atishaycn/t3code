@@ -934,18 +934,6 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
   const displayText = preview ? `${heading} - ${preview}` : heading;
   const hasChangedFiles = (workEntry.changedFiles?.length ?? 0) > 0;
   const previewIsChangedFiles = hasChangedFiles && !workEntry.command && !workEntry.detail;
-  const showDedicatedThinkingBlock =
-    workEntry.tone === "thinking" &&
-    !workEntry.command &&
-    !workEntry.toolTitle &&
-    !hasChangedFiles &&
-    typeof workEntry.detail === "string" &&
-    workEntry.detail.trim().length > 0;
-
-  if (showDedicatedThinkingBlock) {
-    return <ThinkingWorkEntryCard heading={heading} detail={workEntry.detail ?? ""} />;
-  }
-
   return (
     <div className="rounded-lg px-1 py-1">
       <div className="flex items-center gap-2 transition-[opacity,translate] duration-200">
@@ -1015,23 +1003,6 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
           )}
         </div>
       )}
-    </div>
-  );
-});
-
-const ThinkingWorkEntryCard = memo(function ThinkingWorkEntryCard(props: {
-  heading: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border/55 bg-linear-to-br from-card/70 via-card/55 to-card/35 px-3 py-2">
-      <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/65">
-        <BotIcon className="size-3.5" />
-        <span>{props.heading}</span>
-      </div>
-      <div className="whitespace-pre-wrap text-[13px] leading-5 text-foreground/88">
-        {props.detail}
-      </div>
     </div>
   );
 });

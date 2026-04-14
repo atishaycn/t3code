@@ -386,34 +386,6 @@ function runtimeEventToActivities(
       ];
     }
 
-    case "content.delta": {
-      if (
-        event.payload.streamKind !== "reasoning_text" &&
-        event.payload.streamKind !== "reasoning_summary_text"
-      ) {
-        return [];
-      }
-      const detail = truncateDetail(event.payload.delta);
-      if (!detail) {
-        return [];
-      }
-      return [
-        {
-          id: event.eventId,
-          createdAt: event.createdAt,
-          tone: "info",
-          kind: "reasoning.delta",
-          summary: "Thinking",
-          payload: {
-            streamKind: event.payload.streamKind,
-            detail,
-          },
-          turnId: toTurnId(event.turnId) ?? null,
-          ...maybeSequence,
-        },
-      ];
-    }
-
     case "thread.state.changed": {
       if (event.payload.state !== "compacted") {
         return [];

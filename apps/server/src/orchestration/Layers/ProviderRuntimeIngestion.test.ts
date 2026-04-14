@@ -2164,45 +2164,6 @@ describe("ProviderRuntimeIngestion", () => {
     expect(activity?.tone).toBe("info");
   });
 
-  it("projects reasoning content deltas into thinking activities", async () => {
-    const harness = await createHarness();
-    const now = new Date().toISOString();
-
-    harness.emit({
-      type: "content.delta",
-      eventId: asEventId("evt-reasoning-delta"),
-      provider: "pi",
-      createdAt: now,
-      threadId: asThreadId("thread-1"),
-      turnId: asTurnId("turn-reasoning-1"),
-      itemId: "assistant-item-1",
-      payload: {
-        streamKind: "reasoning_text",
-        delta: "Inspecting the repo to find the right component.",
-      },
-    });
-
-    const thread = await waitForThread(harness.engine, (entry) =>
-      entry.activities.some(
-        (activity: ProviderRuntimeTestActivity) => activity.id === "evt-reasoning-delta",
-      ),
-    );
-
-    const activity = thread.activities.find(
-      (candidate: ProviderRuntimeTestActivity) => candidate.id === "evt-reasoning-delta",
-    );
-    const payload =
-      activity?.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
-        : undefined;
-
-    expect(activity?.kind).toBe("reasoning.delta");
-    expect(activity?.summary).toBe("Thinking");
-    expect(activity?.tone).toBe("info");
-    expect(payload?.detail).toBe("Inspecting the repo to find the right component.");
-    expect(payload?.streamKind).toBe("reasoning_text");
-  });
-
   it("projects Codex task lifecycle chunks into thread activities", async () => {
     const harness = await createHarness();
     const now = new Date().toISOString();

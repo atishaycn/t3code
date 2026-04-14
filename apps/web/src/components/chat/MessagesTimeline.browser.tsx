@@ -106,8 +106,7 @@ describe("MessagesTimeline", () => {
       await expect
         .element(page.getByText("Send a message to start the conversation."))
         .not.toBeInTheDocument();
-      await expect.element(page.getByText("Thinking")).toBeVisible();
-      await expect.element(page.getByText("Inspecting repository state")).toBeVisible();
+      await expect.element(page.getByText("Thinking - Inspecting repository state")).toBeVisible();
     } finally {
       await screen.unmount();
     }
@@ -150,8 +149,7 @@ describe("MessagesTimeline", () => {
         />,
       );
 
-      await expect.element(page.getByText("Thinking")).toBeVisible();
-      await expect.element(page.getByText("Inspecting repository state")).toBeVisible();
+      await expect.element(page.getByText("Thinking - Inspecting repository state")).toBeVisible();
       expect(props.onIsAtEndChange).toHaveBeenCalledWith(true);
       expect(scrollToEndSpy).toHaveBeenCalledWith({ animated: false });
       expect(requestAnimationFrameSpy).toHaveBeenCalled();
