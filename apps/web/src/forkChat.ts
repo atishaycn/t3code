@@ -1,4 +1,6 @@
 import { truncate } from "@t3tools/shared/String";
+import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import type { ModelSelection, ProviderKind } from "@t3tools/contracts";
 import type { Thread, ChatMessage } from "./types";
 
 const FORK_CHAT_MAX_PROMPT_CHARS = 18_000;
@@ -50,6 +52,62 @@ function selectForkTranscriptMessages(messages: ReadonlyArray<ChatMessage>): Cha
   ];
 }
 
+function formatProviderSettingsSummary(input: {
+  settings: UnifiedSettings;
+  provider: ProviderKind;
+  modelSelection: ModelSelection;
+}): string[] {
+  const lines = [
+    `- Active provider: ${input.provider}`,
+    `- Selected model: ${input.modelSelection.provider}/${input.modelSelection.model}`,
+  ];
+
+  if (input.modelSelection.options && Object.keys(input.modelSelection.options).length > 0) {
+    lines.push(`- Model options: ${JSON.stringify(input.modelSelection.options)}`);
+  }
+
+  const addSharedProviderSettings = (providerSettings: {
+    enabled: boolean;
+    binaryPath: string;
+    customModels: ReadonlyArray<string>;
+    homePath?: string;
+  }) => {
+    lines.push(`- Provider enabled: ${providerSettings.enabled ? "yes" : "no"}`);
+
+    if (providerSettings.binaryPath.trim().length > 0) {
+      lines.push(`- Binary path: ${providerSettings.binaryPath}`);
+    }
+
+    if (providerSettings.homePath && providerSettings.homePath.trim().length > 0) {
+      lines.push(`- Home path: ${providerSettings.homePath}`);
+    }
+
+    if (providerSettings.customModels.length > 0) {
+      lines.push(`- Custom models: ${providerSettings.customModels.join(", ")}`);
+    }
+  };
+
+  switch (input.provider) {
+    case "codex": {
+      addSharedProviderSettings(input.settings.providers.codex);
+      break;
+    }
+    case "pi": {
+      const providerSettings = input.settings.providers.pi;
+      addSharedProviderSettings(providerSettings);
+      lines.push(`- /autoreason enabled: ${providerSettings.enableAutoreason ? "yes" : "no"}`);
+      lines.push(`- Full autonomy: ${providerSettings.fullAutonomy ? "yes" : "no"}`);
+      break;
+    }
+    case "claudeAgent": {
+      addSharedProviderSettings(input.settings.providers.claudeAgent);
+      break;
+    }
+  }
+
+  return lines;
+}
+
 export function buildForkChatThreadTitle(title: string): string {
   const normalized = title.trim();
   if (normalized.length === 0) {
@@ -73,6 +131,11 @@ export function buildForkChatPrompt(
     | "messages"
     | "proposedPlans"
   >,
+  currentContext?: {
+    settings: UnifiedSettings;
+    selectedProvider: ProviderKind;
+    selectedModelSelection: ModelSelection;
+  },
 ): string {
   const selectedMessages = selectForkTranscriptMessages(thread.messages);
   const omittedMessageCount = Math.max(0, thread.messages.length - selectedMessages.length);
@@ -112,6 +175,17 @@ export function buildForkChatPrompt(
     "",
     "## Original thread metadata",
     metadataLines.join("\n"),
+    currentContext
+      ? [
+          "",
+          "## Current provider settings for this fork",
+          formatProviderSettingsSummary({
+            settings: currentContext.settings,
+            provider: currentContext.selectedProvider,
+            modelSelection: currentContext.selectedModelSelection,
+          }).join("\n"),
+        ].join("\n")
+      : "",
     latestPlan
       ? [
           "",

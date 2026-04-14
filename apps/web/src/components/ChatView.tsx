@@ -2985,7 +2985,11 @@ export default function ChatView(props: ChatViewProps) {
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: buildForkChatPrompt(activeThread),
+      text: buildForkChatPrompt(activeThread, {
+        settings,
+        selectedProvider: ctxSelectedProvider,
+        selectedModelSelection: ctxSelectedModelSelection,
+      }),
     });
     const nextThreadModelSelection: ModelSelection = ctxSelectedModelSelection;
 

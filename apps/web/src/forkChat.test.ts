@@ -1,4 +1,5 @@
 import type { MessageId, TurnId } from "@t3tools/contracts";
+import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vitest";
 
 import { buildForkChatPrompt, buildForkChatThreadTitle } from "./forkChat";
@@ -83,6 +84,57 @@ describe("buildForkChatPrompt", () => {
     expect(prompt).toContain("[attachments: image:sidebar.png]");
     expect(prompt).toContain("2. ASSISTANT: Yes — I found a flex regression in the header row.");
     expect(prompt).toContain("Do not start new work yet.");
+  });
+
+  it("includes the current provider settings summary when available", () => {
+    const prompt = buildForkChatPrompt(
+      {
+        title: "Debug sidebar layout",
+        modelSelection: {
+          provider: "codex",
+          model: "gpt-5",
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        latestTurn: null,
+        proposedPlans: [],
+        messages: [],
+      },
+      {
+        settings: {
+          ...DEFAULT_UNIFIED_SETTINGS,
+          providers: {
+            ...DEFAULT_UNIFIED_SETTINGS.providers,
+            pi: {
+              ...DEFAULT_UNIFIED_SETTINGS.providers.pi,
+              homePath: "/tmp/pi-home",
+              enableAutoreason: true,
+              fullAutonomy: true,
+              customModels: ["openai/gpt-5"],
+            },
+          },
+        },
+        selectedProvider: "pi",
+        selectedModelSelection: {
+          provider: "pi",
+          model: "openai/gpt-5",
+          options: {
+            reasoningEffort: "high",
+          },
+        },
+      },
+    );
+
+    expect(prompt).toContain("## Current provider settings for this fork");
+    expect(prompt).toContain("- Active provider: pi");
+    expect(prompt).toContain("- Selected model: pi/openai/gpt-5");
+    expect(prompt).toContain('- Model options: {"reasoningEffort":"high"}');
+    expect(prompt).toContain("- Home path: /tmp/pi-home");
+    expect(prompt).toContain("- /autoreason enabled: yes");
+    expect(prompt).toContain("- Full autonomy: yes");
+    expect(prompt).toContain("- Custom models: openai/gpt-5");
   });
 
   it("omits middle transcript messages when the thread is long", () => {
