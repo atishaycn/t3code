@@ -520,7 +520,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     createdAt: activity.createdAt,
     label: taskLabel || activity.summary,
     tone:
-      activity.kind === "task.progress"
+      activity.kind === "task.progress" || activity.kind === "reasoning.delta"
         ? "thinking"
         : activity.tone === "approval"
           ? "info"
@@ -558,7 +558,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   if (requestKind) {
     entry.requestKind = requestKind;
   }
-  const collapseKey = deriveToolLifecycleCollapseKey(entry);
+  const collapseKey = deriveWorkLogCollapseKey(entry);
   if (collapseKey) {
     entry.collapseKey = collapseKey;
   }
@@ -584,6 +584,9 @@ function shouldCollapseToolLifecycleEntries(
   previous: DerivedWorkLogEntry,
   next: DerivedWorkLogEntry,
 ): boolean {
+  if (previous.activityKind === "reasoning.delta" || next.activityKind === "reasoning.delta") {
+    return previous.collapseKey !== undefined && previous.collapseKey === next.collapseKey;
+  }
   if (previous.activityKind !== "tool.updated" && previous.activityKind !== "tool.completed") {
     return false;
   }
@@ -601,7 +604,10 @@ function mergeDerivedWorkLogEntries(
   next: DerivedWorkLogEntry,
 ): DerivedWorkLogEntry {
   const changedFiles = mergeChangedFiles(previous.changedFiles, next.changedFiles);
-  const detail = next.detail ?? previous.detail;
+  const detail =
+    previous.activityKind === "reasoning.delta" && next.activityKind === "reasoning.delta"
+      ? joinReasoningDetail(previous.detail, next.detail)
+      : (next.detail ?? previous.detail);
   const command = next.command ?? previous.command;
   const rawCommand = next.rawCommand ?? previous.rawCommand;
   const toolTitle = next.toolTitle ?? previous.toolTitle;
@@ -622,6 +628,17 @@ function mergeDerivedWorkLogEntries(
   };
 }
 
+function joinReasoningDetail(previous: string | undefined, next: string | undefined) {
+  const left = previous ?? "";
+  const right = next ?? "";
+  if (left.length === 0) return right || undefined;
+  if (right.length === 0) return left || undefined;
+  if (/\s$/.test(left) || /^\s/.test(right)) {
+    return `${left}${right}`;
+  }
+  return `${left} ${right}`;
+}
+
 function mergeChangedFiles(
   previous: ReadonlyArray<string> | undefined,
   next: ReadonlyArray<string> | undefined,
@@ -633,7 +650,10 @@ function mergeChangedFiles(
   return [...new Set(merged)];
 }
 
-function deriveToolLifecycleCollapseKey(entry: DerivedWorkLogEntry): string | undefined {
+function deriveWorkLogCollapseKey(entry: DerivedWorkLogEntry): string | undefined {
+  if (entry.activityKind === "reasoning.delta") {
+    return "reasoning.delta";
+  }
   if (entry.activityKind !== "tool.updated" && entry.activityKind !== "tool.completed") {
     return undefined;
   }

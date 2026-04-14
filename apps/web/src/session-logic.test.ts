@@ -637,6 +637,33 @@ describe("deriveWorkLogEntries", () => {
     expect(entries[0]?.label).toBe("Searching for API endpoints");
   });
 
+  it("surfaces reasoning delta activities as thinking entries and collapses adjacent chunks", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "reasoning-1",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "reasoning.delta",
+        summary: "Thinking",
+        tone: "info",
+        payload: { detail: "Inspecting files" },
+      }),
+      makeActivity({
+        id: "reasoning-2",
+        createdAt: "2026-02-23T00:00:02.000Z",
+        kind: "reasoning.delta",
+        summary: "Thinking",
+        tone: "info",
+        payload: { detail: " and tracing state" },
+      }),
+    ];
+
+    const entries = deriveWorkLogEntries(activities, undefined);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.label).toBe("Thinking");
+    expect(entries[0]?.detail).toBe("Inspecting files and tracing state");
+    expect(entries[0]?.tone).toBe("thinking");
+  });
+
   it("uses payload detail as label for task.completed and preserves error tone", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

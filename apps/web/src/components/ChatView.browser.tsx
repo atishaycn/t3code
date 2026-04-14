@@ -3978,6 +3978,39 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
+  it("shows a desktop sidebar toggle beside the chat title and collapses the sidebar", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-desktop-sidebar-toggle-test" as MessageId,
+        targetText: "desktop sidebar toggle test",
+      }),
+    });
+
+    try {
+      const sidebarTrigger = page.getByLabelText("Toggle Sidebar");
+      await expect.element(sidebarTrigger).toBeInTheDocument();
+
+      const threadTitle = page.getByRole("heading", { name: THREAD_TITLE, level: 2 });
+      const triggerRect = sidebarTrigger.element().getBoundingClientRect();
+      const titleRect = threadTitle.element().getBoundingClientRect();
+      expect(triggerRect.right).toBeLessThan(titleRect.left);
+
+      const desktopSidebar = document.querySelector<HTMLElement>(
+        "[data-slot='sidebar'][data-state='expanded']",
+      );
+      expect(desktopSidebar).not.toBeNull();
+
+      await sidebarTrigger.click();
+      await waitForElement(
+        () => document.querySelector("[data-slot='sidebar'][data-state='collapsed']"),
+        "Desktop sidebar should collapse when the header toggle is clicked.",
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
   it("renders the configurable shortcut and runs a command from the sidebar trigger", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
