@@ -39,6 +39,7 @@ import {
   startEnvironmentConnectionService,
 } from "../environments/runtime";
 import { configureClientTracing } from "../observability/clientTracing";
+import { ThreadStatusDiagnosticsCoordinator } from "../threadStatusDiagnostics";
 import {
   ensurePrimaryEnvironmentReady,
   resolveInitialServerAuthGateState,
@@ -89,6 +90,7 @@ function RootRouteView() {
       <AnchoredToastProvider>
         <AuthenticatedTracingBootstrap />
         <ServerStateBootstrap />
+        <ThreadStatusDiagnosticsCoordinator />
         <EnvironmentConnectionManagerBootstrap />
         <EventRouter />
         <WebSocketConnectionCoordinator />

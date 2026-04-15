@@ -76,6 +76,7 @@ const rpcClientMock = {
     upsertKeybinding: vi.fn(),
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
+    appendThreadStatusLog: vi.fn(),
     subscribeConfig: vi.fn(),
     subscribeLifecycle: vi.fn(),
     subscribeAuthAccess: vi.fn(),
@@ -88,6 +89,11 @@ const rpcClientMock = {
       registerListener(shellStreamListeners, listener),
     ),
     subscribeThread: vi.fn(() => () => undefined),
+  },
+  provider: {
+    getPiThreadRuntime: vi.fn(),
+    updatePiThreadRuntime: vi.fn(),
+    compactPiThread: vi.fn(),
   },
 };
 
@@ -463,6 +469,20 @@ describe("wsApi", () => {
     expect(rpcClientMock.server.updateSettings).toHaveBeenCalledWith({
       enableAssistantStreaming: true,
     });
+  });
+
+  it("forwards thread-status diagnostic appends directly to the RPC client", async () => {
+    rpcClientMock.server.appendThreadStatusLog.mockResolvedValue(undefined);
+    const { createLocalApi } = await import("./localApi");
+
+    const api = createLocalApi(rpcClientMock as never);
+    const input = {
+      threadId: "thread-1",
+      recordJson: '{"version":1}',
+    } as const;
+
+    await expect(api.server.appendThreadStatusLog(input as never)).resolves.toBeUndefined();
+    expect(rpcClientMock.server.appendThreadStatusLog).toHaveBeenCalledWith(input);
   });
 
   it("forwards context menu metadata to the desktop bridge", async () => {

@@ -12,11 +12,19 @@ The local trace file is the persisted source of truth. There is no separate pers
 
 ### Logs
 
-Logs are human-facing only:
+Most logs are still human-facing only:
 
 - destination: stdout
 - format: `Logger.consolePretty()`
-- persistence: none
+- persistence: none for normal pretty logs
+
+Persisted log exceptions exist for targeted diagnostics:
+
+- provider runtime event logs: `${logsDirectoryPath}/provider/*.log`
+- terminal session logs: `${logsDirectoryPath}/terminals/*`
+- thread status diagnostics: `${logsDirectoryPath}/thread-status/<thread-id>.ndjson`
+
+The thread status diagnostic files are written by the web client through server RPC. Each line is one JSON record describing the sidebar/thread-list status decision for a thread, including the previous and next visible label/reason, latest turn/session summaries, pending approval or user-input state, recent activity summaries, message-window context, and local UI context like `lastVisitedAt`.
 
 If you want a log message to show up in the trace file, emit it inside an active span with `Effect.log...`. `Logger.tracerLogger` will attach it as a span event.
 
@@ -47,7 +55,11 @@ If OTLP is not configured, metrics still exist in-process, but you will not have
 
 ### Related Artifacts
 
-Provider event NDJSON files still exist for provider runtime streams. Those are separate from the main server trace file.
+Additional persisted artifacts under the logs directory are separate from the main server trace file:
+
+- provider event logs for provider runtime streams under `provider/`
+- per-thread status decision NDJSON files under `thread-status/`
+- terminal history/log artifacts under `terminals/`
 
 ## Run The Server In Instrumented Mode
 

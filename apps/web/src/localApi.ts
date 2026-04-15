@@ -115,6 +115,9 @@ export function createLocalApi(rpcClient: WsRpcClient): LocalApi {
       upsertKeybinding: rpcClient.server.upsertKeybinding,
       getSettings: rpcClient.server.getSettings,
       updateSettings: rpcClient.server.updateSettings,
+      appendThreadStatusLog: async (input) => {
+        await rpcClient.server.appendThreadStatusLog(input);
+      },
     },
   };
 }

@@ -35,6 +35,7 @@ function createTestClient() {
       upsertKeybinding: vi.fn(async () => undefined),
       getSettings: vi.fn(async () => undefined),
       updateSettings: vi.fn(async () => undefined),
+      appendThreadStatusLog: vi.fn(async () => undefined),
     },
     orchestration: {
       dispatchCommand: vi.fn(async () => undefined),
