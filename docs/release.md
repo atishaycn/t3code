@@ -130,7 +130,7 @@ Checklist:
 ## 4) Ongoing release checklist
 
 1. Ensure `main` is green in CI.
-2. Bump app version as needed.
+2. For ad-hoc macOS DMG builds, `bun run push:dmg` now auto-increments the stored patch version before building, updates `apps/server/package.json` and `apps/desktop/package.json`, and rewrites `scripts/push-and-build-dmg.ts` with the new baseline for the next run.
 3. Create release tag: `vX.Y.Z`.
 4. Push tag.
 5. Verify workflow steps:

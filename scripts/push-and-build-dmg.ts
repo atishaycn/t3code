@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
+import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+
+const LAST_PUSH_DMG_VERSION = "0.0.17";
+const SERVER_PACKAGE_JSON_PATH = new URL("../apps/server/package.json", import.meta.url);
+const DESKTOP_PACKAGE_JSON_PATH = new URL("../apps/desktop/package.json", import.meta.url);
+const PUSH_AND_BUILD_DMG_SCRIPT_PATH = new URL("./push-and-build-dmg.ts", import.meta.url);
 
 export interface PushAndBuildDmgOptions {
   readonly remote: string;
@@ -17,6 +23,67 @@ export interface PlannedCommand {
   readonly command: string;
   readonly args: ReadonlyArray<string>;
   readonly description: string;
+}
+
+export interface VersionBumpResult {
+  readonly previousVersion: string;
+  readonly nextVersion: string;
+}
+
+export function getNextPatchVersion(version: string): string {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version.trim());
+  if (!match) {
+    throw new Error(`Invalid version: ${version}`);
+  }
+
+  const major = match[1];
+  const minor = match[2];
+  const patch = match[3];
+  if (!major || !minor || !patch) {
+    throw new Error(`Invalid version: ${version}`);
+  }
+
+  return `${major}.${minor}.${Number.parseInt(patch, 10) + 1}`;
+}
+
+export function updateVersionInPackageJson(content: string, version: string): string {
+  return content.replace(/"version":\s*"[^"]+"/, `"version": "${version}"`);
+}
+
+export function updateStoredPushDmgVersion(content: string, version: string): string {
+  return content.replace(
+    /const LAST_PUSH_DMG_VERSION = "[^"]+";/,
+    `const LAST_PUSH_DMG_VERSION = "${version}";`,
+  );
+}
+
+export function bumpPushDmgVersionOnDisk(): VersionBumpResult {
+  const nextVersion = getNextPatchVersion(LAST_PUSH_DMG_VERSION);
+
+  const serverPackageJson = readFileSync(SERVER_PACKAGE_JSON_PATH, "utf8");
+  const desktopPackageJson = readFileSync(DESKTOP_PACKAGE_JSON_PATH, "utf8");
+  const scriptSource = readFileSync(PUSH_AND_BUILD_DMG_SCRIPT_PATH, "utf8");
+
+  writeFileSync(
+    SERVER_PACKAGE_JSON_PATH,
+    updateVersionInPackageJson(serverPackageJson, nextVersion),
+    "utf8",
+  );
+  writeFileSync(
+    DESKTOP_PACKAGE_JSON_PATH,
+    updateVersionInPackageJson(desktopPackageJson, nextVersion),
+    "utf8",
+  );
+  writeFileSync(
+    PUSH_AND_BUILD_DMG_SCRIPT_PATH,
+    updateStoredPushDmgVersion(scriptSource, nextVersion),
+    "utf8",
+  );
+
+  return {
+    previousVersion: LAST_PUSH_DMG_VERSION,
+    nextVersion,
+  };
 }
 
 export function parsePushAndBuildDmgArgs(argv: ReadonlyArray<string>): PushAndBuildDmgOptions {
@@ -198,6 +265,13 @@ if (import.meta.main) {
 
     if (!options.skipBuild && !options.dryRun) {
       assertHostPlatform();
+    }
+
+    if (!options.skipBuild && !options.dryRun) {
+      const versionBump = bumpPushDmgVersionOnDisk();
+      console.log(
+        `✓ Bumped desktop version ${versionBump.previousVersion} → ${versionBump.nextVersion} in apps/server/package.json, apps/desktop/package.json, and scripts/push-and-build-dmg.ts`,
+      );
     }
 
     const currentBranch = options.branch ?? resolveCurrentGitBranch();

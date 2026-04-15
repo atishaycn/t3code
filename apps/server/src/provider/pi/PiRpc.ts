@@ -543,7 +543,11 @@ async function listPiExtensionEntriesFromDirectory(
       continue;
     }
     const entryPath = Path.join(directoryPath, entry.name);
-    if (entry.isFile() && /\.(?:[cm]?js|tsx?)$/i.test(entry.name)) {
+    const stats = await FS.promises.stat(entryPath).catch(() => null);
+    if (!stats) {
+      continue;
+    }
+    if (stats.isFile() && /\.(?:[cm]?js|tsx?)$/i.test(entry.name)) {
       discovered.push({
         name: entry.name.replace(/\.(?:[cm]?js|tsx?)$/i, ""),
         path: entryPath,
@@ -551,7 +555,7 @@ async function listPiExtensionEntriesFromDirectory(
       });
       continue;
     }
-    if (entry.isDirectory()) {
+    if (stats.isDirectory()) {
       const indexCandidates = ["index.ts", "index.tsx", "index.js", "index.mjs", "index.cjs"];
       for (const candidate of indexCandidates) {
         const candidatePath = Path.join(entryPath, candidate);

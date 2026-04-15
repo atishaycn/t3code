@@ -666,6 +666,7 @@ export default function ChatView(props: ChatViewProps) {
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
   optimisticUserMessagesRef.current = optimisticUserMessages;
+  const pendingOptimisticUserMessagesByThreadIdRef = useRef<Record<string, ChatMessage[]>>({});
   const [localDraftErrorsByDraftId, setLocalDraftErrorsByDraftId] = useState<
     Record<string, string | null>
   >({});
@@ -2060,9 +2061,24 @@ export default function ChatView(props: ChatViewProps) {
 
   useEffect(() => {
     setOptimisticUserMessages((existing) => {
+      const nextThreadOptimisticMessages =
+        pendingOptimisticUserMessagesByThreadIdRef.current[threadId] ?? [];
+      const nextThreadMessageIds = new Set(
+        nextThreadOptimisticMessages.map((message) => message.id),
+      );
+
       for (const message of existing) {
+        if (nextThreadMessageIds.has(message.id)) {
+          continue;
+        }
         revokeUserMessagePreviewUrls(message);
       }
+
+      if (nextThreadOptimisticMessages.length > 0) {
+        delete pendingOptimisticUserMessagesByThreadIdRef.current[threadId];
+        return nextThreadOptimisticMessages;
+      }
+
       return [];
     });
     resetLocalDispatch();
@@ -2984,6 +3000,7 @@ export default function ChatView(props: ChatViewProps) {
     const createdAt = new Date().toISOString();
     const nextThreadId = newThreadId();
     const nextThreadTitle = buildForkChatThreadTitle(activeThread.title);
+    const forkMessageId = newMessageId();
     const outgoingForkPrompt = formatOutgoingPrompt({
       provider: ctxSelectedProvider,
       model: ctxSelectedModel,
@@ -2996,6 +3013,17 @@ export default function ChatView(props: ChatViewProps) {
       }),
     });
     const nextThreadModelSelection: ModelSelection = ctxSelectedModelSelection;
+
+    pendingOptimisticUserMessagesByThreadIdRef.current[nextThreadId] = [
+      {
+        id: forkMessageId,
+        role: "user",
+        text: outgoingForkPrompt,
+        attachments: [],
+        createdAt,
+        streaming: false,
+      },
+    ];
 
     sendInFlightRef.current = true;
     beginLocalDispatch({ preparingWorktree: false });
@@ -3024,7 +3052,7 @@ export default function ChatView(props: ChatViewProps) {
           commandId: newCommandId(),
           threadId: nextThreadId,
           message: {
-            messageId: newMessageId(),
+            messageId: forkMessageId,
             role: "user",
             text: outgoingForkPrompt,
             attachments: [],
@@ -3050,6 +3078,7 @@ export default function ChatView(props: ChatViewProps) {
         });
       })
       .catch(async (err: unknown) => {
+        delete pendingOptimisticUserMessagesByThreadIdRef.current[nextThreadId];
         await api.orchestration
           .dispatchCommand({
             type: "thread.delete",
@@ -3077,6 +3106,7 @@ export default function ChatView(props: ChatViewProps) {
     navigate,
     resetLocalDispatch,
     runtimeMode,
+    settings,
   ]);
 
   const onImplementPlanInNewThread = useCallback(async () => {

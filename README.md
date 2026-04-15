@@ -57,6 +57,8 @@ Build and ship a macOS DMG from the current branch with:
 bun run push:dmg
 ```
 
+This command automatically bumps the desktop release version before building the DMG, updates `apps/server/package.json`, `apps/desktop/package.json`, and then rewrites `scripts/push-and-build-dmg.ts` so the next run starts from the newly used version.
+
 Useful flags:
 
 - `--remote upstream`

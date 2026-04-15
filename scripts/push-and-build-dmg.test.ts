@@ -1,8 +1,37 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { buildPushAndBuildDmgPlan, parsePushAndBuildDmgArgs } from "./push-and-build-dmg.ts";
+import {
+  buildPushAndBuildDmgPlan,
+  getNextPatchVersion,
+  parsePushAndBuildDmgArgs,
+  updateStoredPushDmgVersion,
+  updateVersionInPackageJson,
+} from "./push-and-build-dmg.ts";
 
 describe("push-and-build-dmg", () => {
+  describe("version bump helpers", () => {
+    it("increments the stored patch version", () => {
+      assert.equal(getNextPatchVersion("0.0.17"), "0.0.18");
+    });
+
+    it("updates package.json version fields", () => {
+      assert.equal(
+        updateVersionInPackageJson('{\n  "name": "demo",\n  "version": "0.0.17"\n}\n', "0.0.18"),
+        '{\n  "name": "demo",\n  "version": "0.0.18"\n}\n',
+      );
+    });
+
+    it("updates the script's stored version marker", () => {
+      assert.equal(
+        updateStoredPushDmgVersion(
+          'const LAST_PUSH_DMG_VERSION = "0.0.17";\nconsole.log("ok");\n',
+          "0.0.18",
+        ),
+        'const LAST_PUSH_DMG_VERSION = "0.0.18";\nconsole.log("ok");\n',
+      );
+    });
+  });
+
   describe("parsePushAndBuildDmgArgs", () => {
     it("parses explicit push and build options", () => {
       const result = parsePushAndBuildDmgArgs([
