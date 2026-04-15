@@ -2649,7 +2649,7 @@ export default function ChatView(props: ChatViewProps) {
     const api = readEnvironmentApi(environmentId);
     if (!api || !activeThread) return;
     await api.orchestration.dispatchCommand({
-      type: "thread.turn.interrupt",
+      type: "thread.session.stop",
       commandId: newCommandId(),
       threadId: activeThread.id,
       createdAt: new Date().toISOString(),
