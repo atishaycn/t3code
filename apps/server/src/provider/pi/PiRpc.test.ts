@@ -4,7 +4,7 @@ import * as Path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { PiRpcProcess } from "./PiRpc";
+import { PiRpcProcess, probePiExtensions } from "./PiRpc";
 
 const tempPaths: string[] = [];
 
@@ -14,6 +14,59 @@ afterEach(async () => {
       await FS.promises.rm(entry, { recursive: true, force: true }).catch(() => undefined);
     }),
   );
+});
+
+describe("probePiExtensions", () => {
+  it("discovers inherited user and project-local Pi extensions", async () => {
+    const tempDir = await FS.promises.mkdtemp(Path.join(OS.tmpdir(), "pi-ext-test-"));
+    tempPaths.push(tempDir);
+
+    const userAgentDir = Path.join(tempDir, "user-agent");
+    const userExtensionDir = Path.join(userAgentDir, "extensions", "user-extension");
+    const projectDir = Path.join(tempDir, "project");
+    const projectExtensionDir = Path.join(projectDir, ".pi", "extensions");
+
+    await FS.promises.mkdir(userExtensionDir, { recursive: true });
+    await FS.promises.mkdir(projectExtensionDir, { recursive: true });
+    await FS.promises.writeFile(Path.join(userExtensionDir, "index.ts"), "export default {};\n");
+    await FS.promises.writeFile(
+      Path.join(projectExtensionDir, "autoresearch-soul.ts"),
+      "export default {};\n",
+    );
+    await FS.promises.writeFile(Path.join(userAgentDir, "settings.json"), "{}\n");
+
+    const extensions = await probePiExtensions({
+      env: { PI_CODING_AGENT_DIR: userAgentDir },
+      cwd: projectDir,
+      inheritExtensions: true,
+    });
+
+    expect(extensions).toEqual([
+      {
+        name: "autoresearch-soul",
+        path: Path.join(projectExtensionDir, "autoresearch-soul.ts"),
+        source: "project",
+      },
+      {
+        name: "user-extension",
+        path: Path.join(userExtensionDir, "index.ts"),
+        source: "user",
+      },
+    ]);
+  });
+
+  it("returns no extensions when inheritance is disabled", async () => {
+    const tempDir = await FS.promises.mkdtemp(Path.join(OS.tmpdir(), "pi-ext-test-"));
+    tempPaths.push(tempDir);
+
+    const extensions = await probePiExtensions({
+      env: { PI_CODING_AGENT_DIR: tempDir },
+      cwd: tempDir,
+      inheritExtensions: false,
+    });
+
+    expect(extensions).toEqual([]);
+  });
 });
 
 describe("PiRpcProcess.close", () => {
