@@ -1,6 +1,7 @@
 import {
   ArchiveIcon,
   ArrowUpDownIcon,
+  CheckIcon,
   PinIcon,
   ChevronRightIcon,
   CloudIcon,
@@ -134,6 +135,7 @@ import {
   resolveThreadRowClassName,
   resolveThreadStatusPill,
   isThreadActivelyWorking,
+  canMarkThreadDone,
   orderItemsByPreferredIds,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
@@ -369,6 +371,7 @@ interface SidebarThreadRowProps {
   ) => Promise<void>;
   cancelRename: () => void;
   attemptArchiveThread: (threadRef: ScopedThreadRef) => Promise<void>;
+  markThreadDone?: (threadRef: ScopedThreadRef) => void;
   openPrLink: (event: React.MouseEvent<HTMLElement>, prUrl: string) => void;
 }
 
@@ -396,6 +399,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     commitRename,
     cancelRename,
     attemptArchiveThread,
+    markThreadDone,
     openPrLink,
     thread,
   } = props;
@@ -438,6 +442,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   });
   const isHighlighted = isActive || isSelected;
   const isThreadRunning = isThreadActivelyWorking(thread) === "working";
+  const canShowMarkDone = canMarkThreadDone(thread);
   const threadStatus = resolveThreadStatusPill({
     thread: {
       ...thread,
@@ -722,6 +727,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               >
                 Confirm
               </button>
+            ) : canShowMarkDone && markThreadDone ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      data-thread-selection-safe
+                      data-testid={`thread-mark-done-${thread.id}`}
+                      aria-label={`Mark ${thread.title} done`}
+                      className="pointer-events-none absolute top-1/2 right-1 inline-flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center text-muted-foreground opacity-0 transition-all duration-150 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100"
+                      onPointerDown={stopPropagationOnPointerDown}
+                      onClick={() => markThreadDone(threadRef)}
+                    >
+                      <CheckIcon className="size-3.5" />
+                    </button>
+                  }
+                />
+                <TooltipPopup side="top">Mark done</TooltipPopup>
+              </Tooltip>
             ) : !isThreadRunning ? (
               appSettingsConfirmThreadArchive ? (
                 <div className="pointer-events-none absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
@@ -2107,7 +2131,7 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
   const appSettingsConfirmThreadArchive = useSettings<boolean>(
     (settings) => settings.confirmThreadArchive,
   );
-  const { archiveThread, setThreadPinned, deleteThread } = useThreadActions();
+  const { archiveThread, stopThreadSession, setThreadPinned, deleteThread } = useThreadActions();
   const markThreadUnread = useUiStateStore((state) => state.markThreadUnread);
   const toggleThreadSelection = useThreadSelectionStore((state) => state.toggleThread);
   const rangeSelectTo = useThreadSelectionStore((state) => state.rangeSelectTo);
@@ -2199,6 +2223,18 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
       }
     },
     [archiveThread],
+  );
+  const markThreadDone = useCallback(
+    (threadRef: ScopedThreadRef) => {
+      void stopThreadSession(threadRef).catch((error) => {
+        toastManager.add({
+          type: "error",
+          title: "Failed to mark thread done",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        });
+      });
+    },
+    [stopThreadSession],
   );
   const cancelRename = useCallback(() => {
     setRenamingThreadKey(null);
@@ -2309,6 +2345,7 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
       const clicked = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename thread" },
+          ...(canMarkThreadDone(thread) ? [{ id: "mark-done", label: "Mark done" }] : []),
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
@@ -2320,6 +2357,10 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
         setRenamingThreadKey(threadKey);
         setRenamingTitle(thread.title);
         renamingCommittedRef.current = false;
+        return;
+      }
+      if (clicked === "mark-done") {
+        markThreadDone(threadRef);
         return;
       }
       if (clicked === "mark-unread") {
@@ -2384,7 +2425,13 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
       }
       await deleteThread(threadRef);
     },
-    [appSettingsConfirmThreadDelete, deleteThread, markThreadUnread, projectCwdByThreadKey],
+    [
+      appSettingsConfirmThreadDelete,
+      deleteThread,
+      markThreadDone,
+      markThreadUnread,
+      projectCwdByThreadKey,
+    ],
   );
 
   if (workingThreads.length === 0) return null;
@@ -2427,6 +2474,7 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
                 commitRename={commitRename}
                 cancelRename={cancelRename}
                 attemptArchiveThread={attemptArchiveThread}
+                markThreadDone={markThreadDone}
                 openPrLink={() => undefined}
               />
             );

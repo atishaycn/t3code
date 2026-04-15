@@ -91,6 +91,10 @@ export function isThreadActivelyWorking(
   return null;
 }
 
+export function canMarkThreadDone(thread: Pick<ThreadStatusInput, "session">): boolean {
+  return thread.session?.orchestrationStatus === "running";
+}
+
 export interface ThreadJumpHintVisibilityController {
   sync: (shouldShow: boolean) => void;
   dispose: () => void;

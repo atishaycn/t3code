@@ -57,6 +57,24 @@ export function useThreadActions() {
     return resolveThreadRouteRef(currentRouteParams);
   }, [router]);
 
+  const stopThreadSession = useCallback(
+    async (target: ScopedThreadRef) => {
+      const api = readEnvironmentApi(target.environmentId);
+      if (!api) return;
+      const resolved = resolveThreadTarget(target);
+      if (!resolved) return;
+      const { threadRef } = resolved;
+
+      await api.orchestration.dispatchCommand({
+        type: "thread.session.stop",
+        commandId: newCommandId(),
+        threadId: threadRef.threadId,
+        createdAt: new Date().toISOString(),
+      });
+    },
+    [resolveThreadTarget],
+  );
+
   const archiveThread = useCallback(
     async (target: ScopedThreadRef) => {
       const api = readEnvironmentApi(target.environmentId);
@@ -283,6 +301,7 @@ export function useThreadActions() {
 
   return {
     archiveThread,
+    stopThreadSession,
     setThreadPinned,
     unarchiveThread,
     deleteThread,

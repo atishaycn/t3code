@@ -11,6 +11,7 @@ import {
   hasUnseenCompletion,
   isContextMenuPointerDown,
   isThreadActivelyWorking,
+  canMarkThreadDone,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
   resolveSidebarNewThreadSeedContext,
@@ -481,6 +482,36 @@ describe("isThreadActivelyWorking", () => {
         },
       }),
     ).toBeNull();
+  });
+});
+
+describe("canMarkThreadDone", () => {
+  it("allows marking running threads done", () => {
+    expect(
+      canMarkThreadDone({
+        session: {
+          provider: "codex" as const,
+          status: "running" as const,
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:00:00.000Z",
+          orchestrationStatus: "running" as const,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("hides the action after a thread is already settled", () => {
+    expect(
+      canMarkThreadDone({
+        session: {
+          provider: "codex" as const,
+          status: "ready" as const,
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:05:00.000Z",
+          orchestrationStatus: "ready" as const,
+        },
+      }),
+    ).toBe(false);
   });
 });
 
