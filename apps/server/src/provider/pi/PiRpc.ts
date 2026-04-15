@@ -499,11 +499,31 @@ async function syncPiAgentDirectoryLink(
   }
 
   await FS.promises.mkdir(Path.dirname(destinationPath), { recursive: true });
-  await FS.promises.symlink(
-    sourcePath,
-    destinationPath,
-    process.platform === "win32" ? "junction" : "dir",
-  );
+
+  try {
+    await FS.promises.symlink(
+      sourcePath,
+      destinationPath,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "EEXIST") {
+      throw error;
+    }
+
+    const racedTarget = await FS.promises.readlink(destinationPath).catch(() => null);
+    if (racedTarget === sourcePath) {
+      return;
+    }
+
+    await FS.promises.rm(destinationPath, { recursive: true, force: true }).catch(() => undefined);
+    await FS.promises.symlink(
+      sourcePath,
+      destinationPath,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+  }
 }
 
 async function listPiExtensionEntriesFromDirectory(
