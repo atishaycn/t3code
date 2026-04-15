@@ -16,6 +16,7 @@ interface ComposerPrimaryActionsProps {
   compact: boolean;
   pendingAction: PendingActionState | null;
   isRunning: boolean;
+  isPiRuntimeThread: boolean;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -24,6 +25,8 @@ interface ComposerPrimaryActionsProps {
   hasSendableContent: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
+  onSteerNow?: () => void;
+  onQueueFollowUp?: () => void;
   onImplementPlanInNewThread: () => void;
 }
 
@@ -49,6 +52,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   compact,
   pendingAction,
   isRunning,
+  isPiRuntimeThread = false,
   showPlanFollowUpPrompt,
   promptHasText,
   isSendBusy,
@@ -57,6 +61,8 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   hasSendableContent,
   onPreviousPendingQuestion,
   onInterrupt,
+  onSteerNow,
+  onQueueFollowUp,
   onImplementPlanInNewThread,
 }: ComposerPrimaryActionsProps) {
   if (pendingAction) {
@@ -107,6 +113,46 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   }
 
   if (isRunning) {
+    if (isPiRuntimeThread && hasSendableContent && onSteerNow && onQueueFollowUp) {
+      return (
+        <div className={cn("flex items-center justify-end", compact ? "gap-1.5" : "gap-2")}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn("rounded-full", compact ? "px-3" : "px-4")}
+            disabled={isSendBusy || isConnecting}
+            onClick={onSteerNow}
+            data-testid="composer-steer-now"
+          >
+            {compact ? "Steer" : "Steer now"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className={cn("rounded-full", compact ? "px-3" : "px-4")}
+            disabled={isSendBusy || isConnecting}
+            onClick={onQueueFollowUp}
+            data-testid="composer-queue-followup"
+          >
+            {compact ? "Queue" : "Queue follow-up"}
+          </Button>
+          <Button
+            type="button"
+            size={compact ? "icon-sm" : "sm"}
+            variant="destructive"
+            className="rounded-full"
+            onClick={onInterrupt}
+            aria-label="Stop generation"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+              <rect x="2" y="2" width="8" height="8" rx="1.5" />
+            </svg>
+            {!compact ? <span>Stop</span> : null}
+          </Button>
+        </div>
+      );
+    }
     return (
       <button
         type="button"

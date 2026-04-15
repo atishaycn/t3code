@@ -3,6 +3,7 @@ import { ExecutionEnvironmentDescriptor } from "./environment";
 import { ServerAuthDescriptor } from "./auth";
 import {
   IsoDateTime,
+  MessageId,
   NonNegativeInt,
   ProjectId,
   ThreadId,
@@ -118,6 +119,270 @@ export const ServerObservability = Schema.Struct({
   otlpMetricsEnabled: Schema.Boolean,
 });
 export type ServerObservability = typeof ServerObservability.Type;
+
+export const PiQueueMode = Schema.Literals(["all", "one-at-a-time"]);
+export type PiQueueMode = typeof PiQueueMode.Type;
+
+export const ServerPiRuntimeModel = Schema.Struct({
+  provider: TrimmedNonEmptyString,
+  id: TrimmedNonEmptyString,
+  contextWindow: Schema.optional(NonNegativeInt),
+  reasoning: Schema.optional(Schema.Boolean),
+});
+export type ServerPiRuntimeModel = typeof ServerPiRuntimeModel.Type;
+
+export const ServerPiThreadRuntimeState = Schema.Struct({
+  model: Schema.NullOr(ServerPiRuntimeModel),
+  thinkingLevel: TrimmedNonEmptyString,
+  isStreaming: Schema.Boolean,
+  isCompacting: Schema.Boolean,
+  steeringMode: PiQueueMode,
+  followUpMode: PiQueueMode,
+  sessionFile: Schema.optional(TrimmedNonEmptyString),
+  sessionId: TrimmedNonEmptyString,
+  sessionName: Schema.optional(TrimmedNonEmptyString),
+  autoCompactionEnabled: Schema.Boolean,
+  messageCount: NonNegativeInt,
+  pendingMessageCount: NonNegativeInt,
+});
+export type ServerPiThreadRuntimeState = typeof ServerPiThreadRuntimeState.Type;
+
+export const ServerPiSessionStats = Schema.Struct({
+  sessionFile: Schema.optional(TrimmedNonEmptyString),
+  sessionId: TrimmedNonEmptyString,
+  userMessages: NonNegativeInt,
+  assistantMessages: NonNegativeInt,
+  toolCalls: NonNegativeInt,
+  toolResults: NonNegativeInt,
+  totalMessages: NonNegativeInt,
+  tokens: Schema.Struct({
+    input: NonNegativeInt,
+    output: NonNegativeInt,
+    cacheRead: NonNegativeInt,
+    cacheWrite: NonNegativeInt,
+    total: NonNegativeInt,
+  }),
+  cost: Schema.Number,
+  contextUsage: Schema.optional(
+    Schema.Struct({
+      tokens: Schema.NullOr(NonNegativeInt),
+      contextWindow: NonNegativeInt,
+      percent: Schema.NullOr(Schema.Number),
+    }),
+  ),
+});
+export type ServerPiSessionStats = typeof ServerPiSessionStats.Type;
+
+export const ServerGetPiThreadRuntimeInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type ServerGetPiThreadRuntimeInput = typeof ServerGetPiThreadRuntimeInput.Type;
+
+export const ServerGetPiThreadRuntimeResult = Schema.Struct({
+  state: ServerPiThreadRuntimeState,
+  stats: Schema.optional(ServerPiSessionStats),
+});
+export type ServerGetPiThreadRuntimeResult = typeof ServerGetPiThreadRuntimeResult.Type;
+
+export const ServerUpdatePiThreadRuntimeInput = Schema.Struct({
+  threadId: ThreadId,
+  steeringMode: Schema.optional(PiQueueMode),
+  followUpMode: Schema.optional(PiQueueMode),
+  autoCompactionEnabled: Schema.optional(Schema.Boolean),
+  sessionName: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+});
+export type ServerUpdatePiThreadRuntimeInput = typeof ServerUpdatePiThreadRuntimeInput.Type;
+
+export const ServerUpdatePiThreadRuntimeResult = Schema.Struct({
+  state: ServerPiThreadRuntimeState,
+});
+export type ServerUpdatePiThreadRuntimeResult = typeof ServerUpdatePiThreadRuntimeResult.Type;
+
+export const ServerCompactPiThreadInput = Schema.Struct({
+  threadId: ThreadId,
+  customInstructions: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerCompactPiThreadInput = typeof ServerCompactPiThreadInput.Type;
+
+export const ServerCompactPiThreadResult = Schema.Struct({
+  summary: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerCompactPiThreadResult = typeof ServerCompactPiThreadResult.Type;
+
+export const ServerSendPiThreadPromptInput = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+  message: TrimmedNonEmptyString,
+  streamingBehavior: Schema.Literals(["steer", "followUp"]),
+  createdAt: IsoDateTime,
+});
+export type ServerSendPiThreadPromptInput = typeof ServerSendPiThreadPromptInput.Type;
+
+export const ServerSendPiThreadPromptResult = Schema.Struct({});
+export type ServerSendPiThreadPromptResult = typeof ServerSendPiThreadPromptResult.Type;
+
+export class ServerPiThreadRuntimeError extends Schema.TaggedErrorClass<ServerPiThreadRuntimeError>()(
+  "ServerPiThreadRuntimeError",
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {}
+
+export const ThreadStatusDiagnosticArea = Schema.Literals([
+  "sidebar",
+  "thread-list",
+  "thread-view",
+]);
+export type ThreadStatusDiagnosticArea = typeof ThreadStatusDiagnosticArea.Type;
+
+export const ThreadStatusDiagnosticTrigger = Schema.Literals([
+  "initial-evaluation",
+  "app-store-change",
+  "ui-store-change",
+  "terminal-store-change",
+]);
+export type ThreadStatusDiagnosticTrigger = typeof ThreadStatusDiagnosticTrigger.Type;
+
+export const ThreadStatusLabel = Schema.Literals([
+  "Working",
+  "Connecting",
+  "Completed",
+  "Pending Approval",
+  "Awaiting Input",
+  "Plan Ready",
+]);
+export type ThreadStatusLabel = typeof ThreadStatusLabel.Type;
+
+export const ThreadStatusReason = Schema.Literals([
+  "actively-running",
+  "session-connecting",
+  "pending-approval",
+  "pending-user-input",
+  "plan-ready",
+  "unseen-completion",
+  "idle",
+]);
+export type ThreadStatusReason = typeof ThreadStatusReason.Type;
+
+export const ThreadStatusDiagnosticMessageSummary = Schema.Struct({
+  id: Schema.NullOr(TrimmedNonEmptyString),
+  role: Schema.NullOr(TrimmedNonEmptyString),
+  createdAt: Schema.NullOr(IsoDateTime),
+  textPreview: Schema.NullOr(Schema.String),
+  hasImages: Schema.Boolean,
+});
+export type ThreadStatusDiagnosticMessageSummary = typeof ThreadStatusDiagnosticMessageSummary.Type;
+
+export const ThreadStatusDiagnosticActivitySummary = Schema.Struct({
+  id: Schema.NullOr(TrimmedNonEmptyString),
+  type: TrimmedNonEmptyString,
+  createdAt: Schema.NullOr(IsoDateTime),
+  state: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  title: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+});
+export type ThreadStatusDiagnosticActivitySummary =
+  typeof ThreadStatusDiagnosticActivitySummary.Type;
+
+export const ThreadStatusDiagnosticRecord = Schema.Struct({
+  version: Schema.Literal(1),
+  recordedAt: IsoDateTime,
+  threadId: ThreadId,
+  source: Schema.Struct({
+    area: ThreadStatusDiagnosticArea,
+    trigger: ThreadStatusDiagnosticTrigger,
+  }),
+  transition: Schema.Struct({
+    changed: Schema.Boolean,
+    previousLabel: Schema.NullOr(ThreadStatusLabel),
+    nextLabel: Schema.NullOr(ThreadStatusLabel),
+    previousReason: Schema.NullOr(ThreadStatusReason),
+    nextReason: ThreadStatusReason,
+  }),
+  derived: Schema.Struct({
+    label: Schema.NullOr(ThreadStatusLabel),
+    reason: ThreadStatusReason,
+    isRunningTurn: Schema.Boolean,
+    isLatestTurnSettled: Schema.Boolean,
+    hasPendingApproval: Schema.Boolean,
+    hasPendingUserInput: Schema.Boolean,
+    hasManualCompletionOverride: Schema.Boolean,
+    hasActiveTerminal: Schema.Boolean,
+    hasRecentRuntimeActivity: Schema.Boolean,
+    hasUnseenCompletion: Schema.Boolean,
+  }),
+  latestTurn: Schema.Struct({
+    id: Schema.NullOr(TrimmedNonEmptyString),
+    state: Schema.NullOr(TrimmedNonEmptyString),
+    startedAt: Schema.NullOr(IsoDateTime),
+    completedAt: Schema.NullOr(IsoDateTime),
+    providerSessionId: Schema.NullOr(TrimmedNonEmptyString),
+    providerTurnId: Schema.NullOr(TrimmedNonEmptyString),
+  }),
+  latestSession: Schema.Struct({
+    id: Schema.NullOr(TrimmedNonEmptyString),
+    state: Schema.NullOr(TrimmedNonEmptyString),
+    provider: Schema.NullOr(TrimmedNonEmptyString),
+    model: Schema.NullOr(TrimmedNonEmptyString),
+    updatedAt: Schema.NullOr(IsoDateTime),
+  }),
+  inputs: Schema.Struct({
+    pendingApproval: Schema.NullOr(
+      Schema.Struct({
+        kind: TrimmedNonEmptyString,
+        id: Schema.NullOr(TrimmedNonEmptyString),
+        createdAt: Schema.NullOr(IsoDateTime),
+        source: Schema.NullOr(TrimmedNonEmptyString),
+      }),
+    ),
+    pendingUserInput: Schema.NullOr(
+      Schema.Struct({
+        kind: TrimmedNonEmptyString,
+        id: Schema.NullOr(TrimmedNonEmptyString),
+        createdAt: Schema.NullOr(IsoDateTime),
+      }),
+    ),
+    manualCompletion: Schema.Struct({
+      overridden: Schema.Boolean,
+      completedAt: Schema.NullOr(IsoDateTime),
+      lastVisitedAt: Schema.NullOr(IsoDateTime),
+    }),
+    terminal: Schema.Struct({
+      activeCount: NonNegativeInt,
+      lastActivityAt: Schema.NullOr(IsoDateTime),
+    }),
+    activities: Schema.Struct({
+      totalCount: NonNegativeInt,
+      recent: Schema.Array(ThreadStatusDiagnosticActivitySummary),
+    }),
+    messages: Schema.Struct({
+      totalCount: NonNegativeInt,
+      previous: Schema.NullOr(ThreadStatusDiagnosticMessageSummary),
+      anchor: Schema.NullOr(ThreadStatusDiagnosticMessageSummary),
+      next: Schema.NullOr(ThreadStatusDiagnosticMessageSummary),
+    }),
+  }),
+  decisionContext: Schema.Struct({
+    selectedThreadId: Schema.NullOr(ThreadId),
+    visibleThreadId: Schema.NullOr(ThreadId),
+    environmentId: Schema.NullOr(TrimmedNonEmptyString),
+  }),
+});
+export type ThreadStatusDiagnosticRecord = typeof ThreadStatusDiagnosticRecord.Type;
+
+export const ServerAppendThreadStatusLogInput = Schema.Struct({
+  threadId: ThreadId,
+  recordJson: TrimmedNonEmptyString,
+});
+export type ServerAppendThreadStatusLogInput = typeof ServerAppendThreadStatusLogInput.Type;
+
+export class ServerThreadStatusLogError extends Schema.TaggedErrorClass<ServerThreadStatusLogError>()(
+  "ServerThreadStatusLogError",
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {}
 
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,

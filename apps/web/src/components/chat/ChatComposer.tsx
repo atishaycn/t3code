@@ -28,9 +28,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { projectSearchEntriesQueryOptions } from "~/lib/projectReactQuery";
+import { ensureEnvironmentApi } from "~/environmentApi";
 import {
   clampCollapsedComposerCursor,
   type ComposerTrigger,
@@ -129,6 +130,18 @@ const runtimeModeConfig: Record<
 const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
 const COMPOSER_PATH_QUERY_DEBOUNCE_MS = 120;
 const EMPTY_PROJECT_ENTRIES: ProjectEntry[] = [];
+
+function formatPiRuntimeStatsLabel(input: {
+  totalMessages: number;
+  totalTokens: number;
+  pendingMessageCount: number;
+}) {
+  const parts = [`${input.totalMessages} msgs`, `${input.totalTokens.toLocaleString()} tok`];
+  if (input.pendingMessageCount > 0) {
+    parts.push(`${input.pendingMessageCount} queued`);
+  }
+  return parts.join(" · ");
+}
 
 const extendReplacementRangeForTrailingSpace = (
   text: string,
@@ -271,6 +284,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
     isComplete: boolean;
   } | null;
   isRunning: boolean;
+  isPiRuntimeThread: boolean;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -278,6 +292,8 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   hasSendableContent: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
+  onSteerNow?: () => void;
+  onQueueFollowUp?: () => void;
   onImplementPlanInNewThread: () => void;
 }) {
   return (
@@ -290,6 +306,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         compact={props.compact}
         pendingAction={props.pendingAction}
         isRunning={props.isRunning}
+        isPiRuntimeThread={props.isPiRuntimeThread}
         showPlanFollowUpPrompt={props.showPlanFollowUpPrompt}
         promptHasText={props.promptHasText}
         isSendBusy={props.isSendBusy}
@@ -298,6 +315,8 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         hasSendableContent={props.hasSendableContent}
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
+        {...(props.onSteerNow ? { onSteerNow: props.onSteerNow } : {})}
+        {...(props.onQueueFollowUp ? { onQueueFollowUp: props.onQueueFollowUp } : {})}
         onImplementPlanInNewThread={props.onImplementPlanInNewThread}
       />
     </>
@@ -639,6 +658,100 @@ export const ChatComposer = memo(
       () => deriveLatestContextWindowSnapshot(activeThreadActivities ?? []),
       [activeThreadActivities],
     );
+
+    const queryClient = useQueryClient();
+    const activeThreadProvider = activeThreadModelSelection?.provider ?? null;
+    const isPiRuntimeThread = routeKind === "server" && activeThreadProvider === "pi";
+    const piRuntimeQueryKey = useMemo(
+      () => ["pi-thread-runtime", environmentId, activeThreadId] as const,
+      [environmentId, activeThreadId],
+    );
+    const piRuntimeQuery = useQuery({
+      queryKey: piRuntimeQueryKey,
+      enabled: isPiRuntimeThread && activeThreadId !== null,
+      queryFn: async () =>
+        ensureEnvironmentApi(environmentId).provider.getPiThreadRuntime({
+          threadId: activeThreadId!,
+        }),
+      retry: false,
+      staleTime: 5_000,
+    });
+    const updatePiRuntimeMutation = useMutation({
+      mutationFn: (input: {
+        steeringMode?: "all" | "one-at-a-time";
+        followUpMode?: "all" | "one-at-a-time";
+        autoCompactionEnabled?: boolean;
+      }) =>
+        ensureEnvironmentApi(environmentId).provider.updatePiThreadRuntime({
+          threadId: activeThreadId!,
+          ...input,
+        }),
+      onSuccess: (result) => {
+        queryClient.setQueryData(piRuntimeQueryKey, (current) =>
+          current && typeof current === "object"
+            ? { ...current, state: result.state }
+            : { state: result.state },
+        );
+      },
+      onError: (error) => {
+        toastManager.add({
+          type: "error",
+          title: error instanceof Error ? error.message : "Failed to update Pi runtime.",
+        });
+      },
+      onSettled: () => {
+        void queryClient.invalidateQueries({ queryKey: piRuntimeQueryKey });
+      },
+    });
+    const compactPiThreadMutation = useMutation({
+      mutationFn: () =>
+        ensureEnvironmentApi(environmentId).provider.compactPiThread({
+          threadId: activeThreadId!,
+        }),
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: piRuntimeQueryKey });
+      },
+      onError: (error) => {
+        toastManager.add({
+          type: "error",
+          title: error instanceof Error ? error.message : "Failed to compact Pi thread.",
+        });
+      },
+    });
+    const piRuntimeMenuState = useMemo(() => {
+      const runtime = piRuntimeQuery.data;
+      if (!isPiRuntimeThread || !runtime) {
+        return undefined;
+      }
+      return {
+        steeringMode: runtime.state.steeringMode,
+        followUpMode: runtime.state.followUpMode,
+        autoCompactionEnabled: runtime.state.autoCompactionEnabled,
+        ...(runtime.stats
+          ? {
+              sessionStatsLabel: formatPiRuntimeStatsLabel({
+                totalMessages: runtime.stats.totalMessages,
+                totalTokens: runtime.stats.tokens.total,
+                pendingMessageCount: runtime.state.pendingMessageCount,
+              }),
+            }
+          : {}),
+        compacting: compactPiThreadMutation.isPending || runtime.state.isCompacting,
+        updating: updatePiRuntimeMutation.isPending,
+        onSteeringModeChange: (mode: "all" | "one-at-a-time") => {
+          updatePiRuntimeMutation.mutate({ steeringMode: mode });
+        },
+        onFollowUpModeChange: (mode: "all" | "one-at-a-time") => {
+          updatePiRuntimeMutation.mutate({ followUpMode: mode });
+        },
+        onAutoCompactionChange: (enabled: boolean) => {
+          updatePiRuntimeMutation.mutate({ autoCompactionEnabled: enabled });
+        },
+        onCompactNow: () => {
+          compactPiThreadMutation.mutate();
+        },
+      } as const;
+    }, [compactPiThreadMutation, isPiRuntimeThread, piRuntimeQuery.data, updatePiRuntimeMutation]);
 
     // ------------------------------------------------------------------
     // Composer-local state
@@ -1606,9 +1719,82 @@ export const ChatComposer = memo(
       addComposerImages(files);
       focusComposer();
     };
+    const sendPiStreamingPrompt = useCallback(
+      async (streamingBehavior: "steer" | "followUp") => {
+        if (!isPiRuntimeThread || !activeThreadId) {
+          return;
+        }
+        if (composerImages.length > 0 || composerTerminalContexts.length > 0) {
+          toastManager.add({
+            type: "error",
+            title:
+              streamingBehavior === "steer"
+                ? "Steering supports text only right now."
+                : "Queued follow-ups support text only right now.",
+          });
+          return;
+        }
+        const trimmedPrompt = prompt.trim();
+        if (trimmedPrompt.length === 0) {
+          return;
+        }
+        try {
+          await ensureEnvironmentApi(environmentId).provider.sendPiThreadPrompt({
+            threadId: activeThreadId,
+            messageId: randomUUID() as never,
+            message: trimmedPrompt,
+            streamingBehavior,
+            createdAt: new Date().toISOString(),
+          });
+          setComposerDraftPrompt(composerDraftTarget, "");
+          setComposerCursor(0);
+          setComposerTrigger(null);
+          setComposerHighlightedItemId(null);
+          scheduleComposerFocus();
+          toastManager.add({
+            type: "success",
+            title: streamingBehavior === "steer" ? "Steering Pi now" : "Queued in Pi",
+            description:
+              streamingBehavior === "steer"
+                ? "Pi got follow-up instructions for the current turn."
+                : "Pi queued this follow-up for later.",
+          });
+          void queryClient.invalidateQueries({ queryKey: piRuntimeQueryKey });
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title:
+              error instanceof Error
+                ? error.message
+                : streamingBehavior === "steer"
+                  ? "Failed to steer current turn."
+                  : "Failed to send queued message.",
+          });
+        }
+      },
+      [
+        activeThreadId,
+        composerDraftTarget,
+        composerImages.length,
+        composerTerminalContexts.length,
+        environmentId,
+        isPiRuntimeThread,
+        piRuntimeQueryKey,
+        prompt,
+        queryClient,
+        scheduleComposerFocus,
+        setComposerDraftPrompt,
+      ],
+    );
     const handleInterruptPrimaryAction = useCallback(() => {
       void onInterrupt();
     }, [onInterrupt]);
+    const handleSteerNowPrimaryAction = useCallback(() => {
+      void sendPiStreamingPrompt("steer");
+    }, [sendPiStreamingPrompt]);
+    const handleQueueFollowUpPrimaryAction = useCallback(() => {
+      void sendPiStreamingPrompt("followUp");
+    }, [sendPiStreamingPrompt]);
     const handleImplementPlanInNewThreadPrimaryAction = useCallback(() => {
       void onImplementPlanInNewThread();
     }, [onImplementPlanInNewThread]);
@@ -1935,6 +2121,7 @@ export const ChatComposer = memo(
                       planSidebarOpen={planSidebarOpen}
                       runtimeMode={runtimeMode}
                       traitsMenuContent={providerTraitsMenuContent}
+                      {...(piRuntimeMenuState ? { piRuntime: piRuntimeMenuState } : {})}
                       onToggleInteractionMode={toggleInteractionMode}
                       onTogglePlanSidebar={togglePlanSidebar}
                       onRuntimeModeChange={handleRuntimeModeChange}
@@ -1960,6 +2147,25 @@ export const ChatComposer = memo(
                         onRuntimeModeChange={handleRuntimeModeChange}
                         onTogglePlanSidebar={togglePlanSidebar}
                       />
+                      {piRuntimeMenuState ? (
+                        <>
+                          <Separator
+                            orientation="vertical"
+                            className="mx-0.5 hidden h-4 sm:block"
+                          />
+                          <CompactComposerControlsMenu
+                            activePlan={false}
+                            interactionMode={interactionMode}
+                            planSidebarLabel={planSidebarLabel}
+                            planSidebarOpen={planSidebarOpen}
+                            runtimeMode={runtimeMode}
+                            {...(piRuntimeMenuState ? { piRuntime: piRuntimeMenuState } : {})}
+                            onToggleInteractionMode={toggleInteractionMode}
+                            onTogglePlanSidebar={togglePlanSidebar}
+                            onRuntimeModeChange={handleRuntimeModeChange}
+                          />
+                        </>
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -1977,6 +2183,7 @@ export const ChatComposer = memo(
                     activeContextWindow={activeContextWindow}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
+                    isPiRuntimeThread={isPiRuntimeThread}
                     showPlanFollowUpPrompt={
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }
@@ -1987,6 +2194,8 @@ export const ChatComposer = memo(
                     hasSendableContent={composerSendState.hasSendableContent}
                     onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                     onInterrupt={handleInterruptPrimaryAction}
+                    onSteerNow={handleSteerNowPrimaryAction}
+                    onQueueFollowUp={handleQueueFollowUpPrimaryAction}
                     onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
                   />
                 </div>

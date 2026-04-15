@@ -25,9 +25,18 @@ import type {
   ProjectWriteFileResult,
 } from "./project";
 import type {
+  ServerAppendThreadStatusLogInput,
+  ServerCompactPiThreadInput,
+  ServerCompactPiThreadResult,
   ServerConfig,
+  ServerSendPiThreadPromptInput,
+  ServerSendPiThreadPromptResult,
+  ServerGetPiThreadRuntimeInput,
+  ServerGetPiThreadRuntimeResult,
   ServerProviderUpdatedPayload,
   ServerUpsertKeybindingResult,
+  ServerUpdatePiThreadRuntimeInput,
+  ServerUpdatePiThreadRuntimeResult,
 } from "./server";
 import type {
   TerminalClearInput,
@@ -202,6 +211,7 @@ export interface LocalApi {
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;
+    appendThreadStatusLog: (input: ServerAppendThreadStatusLogInput) => Promise<void>;
   };
 }
 
@@ -268,5 +278,17 @@ export interface EnvironmentApi {
         onResubscribe?: () => void;
       },
     ) => () => void;
+  };
+  provider: {
+    getPiThreadRuntime: (
+      input: ServerGetPiThreadRuntimeInput,
+    ) => Promise<ServerGetPiThreadRuntimeResult>;
+    updatePiThreadRuntime: (
+      input: ServerUpdatePiThreadRuntimeInput,
+    ) => Promise<ServerUpdatePiThreadRuntimeResult>;
+    compactPiThread: (input: ServerCompactPiThreadInput) => Promise<ServerCompactPiThreadResult>;
+    sendPiThreadPrompt: (
+      input: ServerSendPiThreadPromptInput,
+    ) => Promise<ServerSendPiThreadPromptResult>;
   };
 }

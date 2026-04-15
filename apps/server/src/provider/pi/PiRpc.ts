@@ -711,29 +711,114 @@ async function syncPiAgentFile(sourcePath: string, destinationPath: string): Pro
   }
 }
 
-async function syncEmbeddedPiSettings(
-  sourceAgentDir: string,
-  destinationAgentDir: string,
-  input?: { readonly inheritExtensions?: boolean },
-): Promise<void> {
-  const sourceSettingsPath = Path.join(sourceAgentDir, "settings.json");
-  const destinationSettingsPath = Path.join(destinationAgentDir, "settings.json");
-  let parsedSettings: unknown;
+async function readPiSettingsRecord(settingsPath: string): Promise<Record<string, unknown> | null> {
   try {
-    parsedSettings = JSON.parse(await FS.promises.readFile(sourceSettingsPath, "utf8"));
+    const parsed = JSON.parse(await FS.promises.readFile(settingsPath, "utf8"));
+    return isRecord(parsed) ? parsed : null;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ENOENT") {
-      return;
+      return null;
     }
     throw error;
   }
+}
 
-  if (!isRecord(parsedSettings)) {
+function mergePiSettingsArrays(
+  left: unknown,
+  right: unknown,
+): Array<string | Record<string, unknown>> | undefined {
+  const merged: Array<string | Record<string, unknown>> = [];
+  const seen = new Set<string>();
+
+  const append = (value: unknown) => {
+    if (!Array.isArray(value)) {
+      return;
+    }
+    for (const entry of value) {
+      if (typeof entry !== "string" && !isRecord(entry)) {
+        continue;
+      }
+      const key = typeof entry === "string" ? entry : JSON.stringify(entry);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(entry);
+    }
+  };
+
+  append(left);
+  append(right);
+
+  return merged.length > 0 ? merged : undefined;
+}
+
+function mergeEmbeddedPiSettings(input: {
+  readonly sourceSettings: Record<string, unknown> | null;
+  readonly projectSettings: Record<string, unknown> | null;
+  readonly inheritExtensions?: boolean;
+}): Record<string, unknown> | null {
+  const sourceSettings = input.sourceSettings
+    ? sanitizePiAgentSettingsForEmbeddedRuntime(
+        input.sourceSettings,
+        input.inheritExtensions !== undefined ? { inheritExtensions: input.inheritExtensions } : {},
+      )
+    : null;
+  const projectSettings = input.projectSettings
+    ? sanitizePiAgentSettingsForEmbeddedRuntime(input.projectSettings, {
+        inheritExtensions: true,
+      })
+    : null;
+
+  if (!sourceSettings && !projectSettings) {
+    return null;
+  }
+
+  const merged: Record<string, unknown> = {
+    ...sourceSettings,
+    ...projectSettings,
+  };
+
+  const packages = mergePiSettingsArrays(sourceSettings?.packages, projectSettings?.packages);
+  if (packages) {
+    merged.packages = packages;
+  }
+
+  const extensions = mergePiSettingsArrays(sourceSettings?.extensions, projectSettings?.extensions);
+  if (extensions) {
+    merged.extensions = extensions;
+  }
+
+  return merged;
+}
+
+async function syncEmbeddedPiSettings(
+  sourceAgentDir: string,
+  destinationAgentDir: string,
+  input?: { readonly inheritExtensions?: boolean; readonly cwd?: string },
+): Promise<void> {
+  const sourceSettings = await readPiSettingsRecord(Path.join(sourceAgentDir, "settings.json"));
+  const projectSettingsPath = input?.cwd?.trim()
+    ? Path.join(input.cwd, ".pi", "settings.json")
+    : null;
+  const projectSettings = projectSettingsPath
+    ? await readPiSettingsRecord(projectSettingsPath)
+    : null;
+  const destinationSettingsPath = Path.join(destinationAgentDir, "settings.json");
+  const mergedSettings = mergeEmbeddedPiSettings({
+    sourceSettings,
+    projectSettings,
+    ...(input?.inheritExtensions !== undefined
+      ? { inheritExtensions: input.inheritExtensions }
+      : {}),
+  });
+
+  if (!mergedSettings) {
     return;
   }
 
-  const sanitized = `${JSON.stringify(sanitizePiAgentSettingsForEmbeddedRuntime(parsedSettings, input), null, 2)}\n`;
+  const sanitized = `${JSON.stringify(mergedSettings, null, 2)}\n`;
   const existing = await FS.promises.readFile(destinationSettingsPath, "utf8").catch(() => null);
   if (existing === sanitized) {
     return;
@@ -745,21 +830,21 @@ async function syncEmbeddedPiSettings(
 export async function prepareEmbeddedPiLauncherEnv(input?: {
   readonly env?: NodeJS.ProcessEnv;
   readonly inheritExtensions?: boolean;
+  readonly cwd?: string;
 }): Promise<NodeJS.ProcessEnv | undefined> {
   const env = input?.env;
   const sourceAgentDir = env?.PI_CODING_AGENT_DIR?.trim() || getDefaultPiAgentDir();
   const destinationAgentDir = embeddedPiAgentDirForSource(
-    `${sourceAgentDir}::inheritExtensions=${input?.inheritExtensions === true ? "1" : "0"}`,
+    `${sourceAgentDir}::inheritExtensions=${input?.inheritExtensions === true ? "1" : "0"}::cwd=${input?.cwd?.trim() || ""}`,
   );
   await FS.promises.mkdir(destinationAgentDir, { recursive: true });
   await Promise.all([
-    syncEmbeddedPiSettings(
-      sourceAgentDir,
-      destinationAgentDir,
+    syncEmbeddedPiSettings(sourceAgentDir, destinationAgentDir, {
       ...(typeof input?.inheritExtensions === "boolean"
-        ? [{ inheritExtensions: input.inheritExtensions }]
-        : []),
-    ),
+        ? { inheritExtensions: input.inheritExtensions }
+        : {}),
+      ...(input?.cwd?.trim() ? { cwd: input.cwd } : {}),
+    }),
     syncPiAgentFile(
       Path.join(sourceAgentDir, "auth.json"),
       Path.join(destinationAgentDir, "auth.json"),
@@ -963,6 +1048,7 @@ export class PiRpcProcess {
       ...(typeof input.inheritExtensions === "boolean"
         ? { inheritExtensions: input.inheritExtensions }
         : {}),
+      cwd: input.cwd,
     });
     const child = ChildProcess.spawn(
       launcher.binaryPath,
@@ -1188,6 +1274,7 @@ export async function probePiVersion(input: {
   readonly env?: NodeJS.ProcessEnv;
   readonly enableAutoreason?: boolean;
   readonly inheritExtensions?: boolean;
+  readonly cwd?: string;
 }): Promise<string | null> {
   const launcher = resolvePiLauncherInvocation({
     binaryPath: input.binaryPath,
@@ -1200,6 +1287,7 @@ export async function probePiVersion(input: {
     ...(typeof input.inheritExtensions === "boolean"
       ? { inheritExtensions: input.inheritExtensions }
       : {}),
+    ...(input.cwd ? { cwd: input.cwd } : {}),
   });
   return new Promise<string | null>((resolve, reject) => {
     const child = ChildProcess.spawn(launcher.binaryPath, [...launcher.args, "--version"], {

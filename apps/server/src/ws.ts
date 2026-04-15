@@ -17,6 +17,8 @@ import {
   ProjectSearchEntriesError,
   ProjectWriteFileError,
   OrchestrationReplayEventsError,
+  ServerPiThreadRuntimeError,
+  ServerThreadStatusLogError,
   ThreadId,
   type TerminalEvent,
   WS_METHODS,
@@ -42,12 +44,15 @@ import {
   observeRpcStreamEffect,
 } from "./observability/RpcInstrumentation";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry";
+import { getPiSessionRuntimeController } from "./provider/Layers/PiAdapter";
+import type { PiRpcSessionState, PiRpcSessionStats } from "./provider/pi/PiRpc";
 import { ServerLifecycleEvents } from "./serverLifecycleEvents";
 import { ServerRuntimeStartup } from "./serverRuntimeStartup";
 import { ServerSettingsService } from "./serverSettings";
 import { TerminalManager } from "./terminal/Services/Manager";
 import { WorkspaceEntries } from "./workspace/Services/WorkspaceEntries";
 import { WorkspaceFileSystem } from "./workspace/Services/WorkspaceFileSystem";
+import { appendThreadStatusDebugLog } from "./threadStatusDebugLog";
 import { WorkspacePathOutsideRootError } from "./workspace/Services/WorkspacePaths";
 import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptRunner";
 import { RepositoryIdentityResolver } from "./project/Services/RepositoryIdentityResolver";
@@ -86,6 +91,38 @@ function isThreadDetailEvent(event: OrchestrationEvent): event is Extract<
 }
 
 const PROVIDER_STATUS_DEBOUNCE_MS = 200;
+
+function toServerPiThreadRuntimeState(state: PiRpcSessionState) {
+  return {
+    model: state.model ?? null,
+    thinkingLevel: state.thinkingLevel,
+    isStreaming: state.isStreaming,
+    isCompacting: state.isCompacting,
+    steeringMode: state.steeringMode,
+    followUpMode: state.followUpMode,
+    ...(state.sessionFile ? { sessionFile: state.sessionFile } : {}),
+    sessionId: state.sessionId,
+    ...(state.sessionName ? { sessionName: state.sessionName } : {}),
+    autoCompactionEnabled: state.autoCompactionEnabled,
+    messageCount: state.messageCount,
+    pendingMessageCount: state.pendingMessageCount,
+  };
+}
+
+function toServerPiSessionStats(stats: PiRpcSessionStats) {
+  return {
+    ...(stats.sessionFile ? { sessionFile: stats.sessionFile } : {}),
+    sessionId: stats.sessionId,
+    userMessages: stats.userMessages,
+    assistantMessages: stats.assistantMessages,
+    toolCalls: stats.toolCalls,
+    toolResults: stats.toolResults,
+    totalMessages: stats.totalMessages,
+    tokens: stats.tokens,
+    cost: stats.cost,
+    ...(stats.contextUsage ? { contextUsage: stats.contextUsage } : {}),
+  };
+}
 
 function toAuthAccessStreamEvent(
   change: BootstrapCredentialChange | SessionCredentialChange,
@@ -734,6 +771,179 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           observeRpcEffect(WS_METHODS.serverUpdateSettings, serverSettings.updateSettings(patch), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverAppendThreadStatusLog]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverAppendThreadStatusLog,
+            appendThreadStatusDebugLog({
+              logsDir: config.logsDir,
+              payload: input,
+            }).pipe(
+              Effect.map(() => ({})),
+              Effect.mapError(
+                (cause) =>
+                  new ServerThreadStatusLogError({
+                    message: "Failed to append thread status log.",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverGetPiThreadRuntime]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverGetPiThreadRuntime,
+            Effect.tryPromise({
+              try: async () => {
+                const controller = getPiSessionRuntimeController();
+                if (!controller) {
+                  throw new Error("Pi runtime controller is unavailable.");
+                }
+                const [state, stats] = await Promise.all([
+                  controller.getRuntimeState(input.threadId),
+                  controller.getSessionStats(input.threadId).catch(() => undefined),
+                ]);
+                return stats
+                  ? {
+                      state: toServerPiThreadRuntimeState(state),
+                      stats: toServerPiSessionStats(stats),
+                    }
+                  : { state: toServerPiThreadRuntimeState(state) };
+              },
+              catch: (cause) =>
+                new ServerPiThreadRuntimeError({
+                  message: "Failed to load Pi thread runtime state.",
+                  cause,
+                }),
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverUpdatePiThreadRuntime]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverUpdatePiThreadRuntime,
+            Effect.tryPromise({
+              try: async () => {
+                const controller = getPiSessionRuntimeController();
+                if (!controller) {
+                  throw new Error("Pi runtime controller is unavailable.");
+                }
+                const updateInput = {
+                  threadId: input.threadId,
+                  ...(input.steeringMode ? { steeringMode: input.steeringMode } : {}),
+                  ...(input.followUpMode ? { followUpMode: input.followUpMode } : {}),
+                  ...(typeof input.autoCompactionEnabled === "boolean"
+                    ? { autoCompactionEnabled: input.autoCompactionEnabled }
+                    : {}),
+                  ...(input.sessionName !== undefined ? { sessionName: input.sessionName } : {}),
+                };
+                const state = await controller.updateRuntimeSettings(updateInput);
+                return { state: toServerPiThreadRuntimeState(state) };
+              },
+              catch: (cause) =>
+                new ServerPiThreadRuntimeError({
+                  message: "Failed to update Pi thread runtime state.",
+                  cause,
+                }),
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverCompactPiThread]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverCompactPiThread,
+            Effect.tryPromise({
+              try: async () => {
+                const controller = getPiSessionRuntimeController();
+                if (!controller) {
+                  throw new Error("Pi runtime controller is unavailable.");
+                }
+                const result = await controller.compact(input.threadId, input.customInstructions);
+                return result ?? {};
+              },
+              catch: (cause) =>
+                new ServerPiThreadRuntimeError({
+                  message: "Failed to compact Pi thread runtime state.",
+                  cause,
+                }),
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverSendPiThreadPrompt]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverSendPiThreadPrompt,
+            Effect.gen(function* () {
+              const controller = getPiSessionRuntimeController();
+              if (!controller) {
+                return yield* new ServerPiThreadRuntimeError({
+                  message: "Pi runtime controller is unavailable.",
+                });
+              }
+
+              yield* orchestrationEngine
+                .dispatch({
+                  type: "thread.message.create",
+                  commandId: serverCommandId(
+                    input.streamingBehavior === "steer"
+                      ? "pi-steer-message"
+                      : "pi-followup-message",
+                  ),
+                  threadId: input.threadId,
+                  message: {
+                    messageId: input.messageId,
+                    role: "user",
+                    text: input.message,
+                    attachments: [],
+                  },
+                  createdAt: input.createdAt,
+                })
+                .pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new ServerPiThreadRuntimeError({
+                        message: "Failed to persist Pi follow-up message.",
+                        cause,
+                      }),
+                  ),
+                );
+
+              yield* Effect.tryPromise({
+                try: () => controller.sendPrompt(input),
+                catch: (cause) =>
+                  new ServerPiThreadRuntimeError({
+                    message: `Failed to ${input.streamingBehavior === "steer" ? "steer" : "queue"} Pi thread prompt.`,
+                    cause,
+                  }),
+              }).pipe(
+                Effect.tapError((error) =>
+                  orchestrationEngine
+                    .dispatch({
+                      type: "thread.activity.append",
+                      commandId: serverCommandId("pi-followup-error"),
+                      threadId: input.threadId,
+                      activity: {
+                        id: EventId.make(crypto.randomUUID()),
+                        tone: "error",
+                        kind: "provider.error",
+                        summary:
+                          input.streamingBehavior === "steer"
+                            ? "Failed to steer active Pi turn"
+                            : "Failed to queue Pi follow-up",
+                        payload: {
+                          detail: error.message,
+                          requestId: input.messageId,
+                          streamingBehavior: input.streamingBehavior,
+                        },
+                        turnId: null,
+                        createdAt: input.createdAt,
+                      },
+                      createdAt: input.createdAt,
+                    })
+                    .pipe(Effect.ignoreCause({ log: true })),
+                ),
+              );
+
+              return {};
+            }),
+            { "rpc.aggregate": "server" },
+          ),
         [WS_METHODS.projectsSearchEntries]: (input) =>
           observeRpcEffect(
             WS_METHODS.projectsSearchEntries,

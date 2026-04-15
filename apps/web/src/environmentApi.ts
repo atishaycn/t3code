@@ -40,6 +40,12 @@ export function createEnvironmentApi(rpcClient: WsRpcClient): EnvironmentApi {
       subscribeThread: (input, callback, options) =>
         rpcClient.orchestration.subscribeThread(input, callback, options),
     },
+    provider: {
+      getPiThreadRuntime: rpcClient.provider.getPiThreadRuntime,
+      updatePiThreadRuntime: rpcClient.provider.updatePiThreadRuntime,
+      compactPiThread: rpcClient.provider.compactPiThread,
+      sendPiThreadPrompt: rpcClient.provider.sendPiThreadPrompt,
+    },
   };
 }
 

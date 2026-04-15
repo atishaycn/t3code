@@ -950,6 +950,77 @@ function resolveWsRpc(body: NormalizedWsRpcRequestBody): unknown {
       updatedAt: NOW_ISO,
     };
   }
+  if (tag === WS_METHODS.serverGetPiThreadRuntime) {
+    return {
+      state: {
+        model: {
+          provider: "openai",
+          id: "gpt-5",
+          contextWindow: 200000,
+          reasoning: true,
+        },
+        thinkingLevel: "medium",
+        isStreaming: false,
+        isCompacting: false,
+        steeringMode: "one-at-a-time",
+        followUpMode: "all",
+        sessionId: "pi-session-browser",
+        autoCompactionEnabled: true,
+        messageCount: 10,
+        pendingMessageCount: 0,
+      },
+      stats: {
+        sessionId: "pi-session-browser",
+        userMessages: 3,
+        assistantMessages: 4,
+        toolCalls: 1,
+        toolResults: 1,
+        totalMessages: 9,
+        tokens: {
+          input: 100,
+          output: 120,
+          cacheRead: 0,
+          cacheWrite: 0,
+          total: 220,
+        },
+        cost: 0,
+      },
+    };
+  }
+  if (tag === WS_METHODS.serverUpdatePiThreadRuntime) {
+    return {
+      state: {
+        model: {
+          provider: "openai",
+          id: "gpt-5",
+          contextWindow: 200000,
+          reasoning: true,
+        },
+        thinkingLevel: "medium",
+        isStreaming: false,
+        isCompacting: false,
+        steeringMode:
+          body.steeringMode === "all" || body.steeringMode === "one-at-a-time"
+            ? body.steeringMode
+            : "one-at-a-time",
+        followUpMode:
+          body.followUpMode === "all" || body.followUpMode === "one-at-a-time"
+            ? body.followUpMode
+            : "all",
+        sessionId: "pi-session-browser",
+        autoCompactionEnabled:
+          typeof body.autoCompactionEnabled === "boolean" ? body.autoCompactionEnabled : true,
+        messageCount: 10,
+        pendingMessageCount: 0,
+      },
+    };
+  }
+  if (tag === WS_METHODS.serverCompactPiThread) {
+    return {};
+  }
+  if (tag === WS_METHODS.serverSendPiThreadPrompt) {
+    return {};
+  }
   return {};
 }
 

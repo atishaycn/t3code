@@ -63,10 +63,21 @@ import {
   TerminalWriteInput,
 } from "./terminal";
 import {
+  ServerAppendThreadStatusLogInput,
+  ServerCompactPiThreadInput,
+  ServerCompactPiThreadResult,
   ServerConfigStreamEvent,
   ServerConfig,
+  ServerGetPiThreadRuntimeInput,
+  ServerSendPiThreadPromptInput,
+  ServerSendPiThreadPromptResult,
+  ServerGetPiThreadRuntimeResult,
   ServerLifecycleStreamEvent,
+  ServerPiThreadRuntimeError,
   ServerProviderUpdatedPayload,
+  ServerThreadStatusLogError,
+  ServerUpdatePiThreadRuntimeInput,
+  ServerUpdatePiThreadRuntimeResult,
   ServerUpsertKeybindingInput,
   ServerUpsertKeybindingResult,
 } from "./server";
@@ -110,6 +121,11 @@ export const WS_METHODS = {
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
+  serverAppendThreadStatusLog: "server.appendThreadStatusLog",
+  serverGetPiThreadRuntime: "server.getPiThreadRuntime",
+  serverUpdatePiThreadRuntime: "server.updatePiThreadRuntime",
+  serverCompactPiThread: "server.compactPiThread",
+  serverSendPiThreadPrompt: "server.sendPiThreadPrompt",
 
   // Streaming subscriptions
   subscribeGitStatus: "subscribeGitStatus",
@@ -146,6 +162,36 @@ export const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSetting
   payload: Schema.Struct({ patch: ServerSettingsPatch }),
   success: ServerSettings,
   error: ServerSettingsError,
+});
+
+export const WsServerAppendThreadStatusLogRpc = Rpc.make(WS_METHODS.serverAppendThreadStatusLog, {
+  payload: ServerAppendThreadStatusLogInput,
+  success: Schema.Struct({}),
+  error: ServerThreadStatusLogError,
+});
+
+export const WsServerGetPiThreadRuntimeRpc = Rpc.make(WS_METHODS.serverGetPiThreadRuntime, {
+  payload: ServerGetPiThreadRuntimeInput,
+  success: ServerGetPiThreadRuntimeResult,
+  error: ServerPiThreadRuntimeError,
+});
+
+export const WsServerUpdatePiThreadRuntimeRpc = Rpc.make(WS_METHODS.serverUpdatePiThreadRuntime, {
+  payload: ServerUpdatePiThreadRuntimeInput,
+  success: ServerUpdatePiThreadRuntimeResult,
+  error: ServerPiThreadRuntimeError,
+});
+
+export const WsServerCompactPiThreadRpc = Rpc.make(WS_METHODS.serverCompactPiThread, {
+  payload: ServerCompactPiThreadInput,
+  success: ServerCompactPiThreadResult,
+  error: ServerPiThreadRuntimeError,
+});
+
+export const WsServerSendPiThreadPromptRpc = Rpc.make(WS_METHODS.serverSendPiThreadPrompt, {
+  payload: ServerSendPiThreadPromptInput,
+  success: ServerSendPiThreadPromptResult,
+  error: ServerPiThreadRuntimeError,
 });
 
 export const WsProjectsSearchEntriesRpc = Rpc.make(WS_METHODS.projectsSearchEntries, {
@@ -347,6 +393,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerUpsertKeybindingRpc,
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,
+  WsServerAppendThreadStatusLogRpc,
+  WsServerGetPiThreadRuntimeRpc,
+  WsServerUpdatePiThreadRuntimeRpc,
+  WsServerCompactPiThreadRpc,
+  WsServerSendPiThreadPromptRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,

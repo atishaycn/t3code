@@ -105,6 +105,7 @@ export interface WsRpcClient {
     readonly updateSettings: (
       patch: ServerSettingsPatch,
     ) => ReturnType<RpcUnaryMethod<typeof WS_METHODS.serverUpdateSettings>>;
+    readonly appendThreadStatusLog: RpcUnaryMethod<typeof WS_METHODS.serverAppendThreadStatusLog>;
     readonly subscribeConfig: RpcStreamMethod<typeof WS_METHODS.subscribeServerConfig>;
     readonly subscribeLifecycle: RpcStreamMethod<typeof WS_METHODS.subscribeServerLifecycle>;
     readonly subscribeAuthAccess: RpcStreamMethod<typeof WS_METHODS.subscribeAuthAccess>;
@@ -115,6 +116,12 @@ export interface WsRpcClient {
     readonly getFullThreadDiff: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.getFullThreadDiff>;
     readonly subscribeShell: RpcStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeShell>;
     readonly subscribeThread: RpcInputStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeThread>;
+  };
+  readonly provider: {
+    readonly getPiThreadRuntime: RpcUnaryMethod<typeof WS_METHODS.serverGetPiThreadRuntime>;
+    readonly updatePiThreadRuntime: RpcUnaryMethod<typeof WS_METHODS.serverUpdatePiThreadRuntime>;
+    readonly compactPiThread: RpcUnaryMethod<typeof WS_METHODS.serverCompactPiThread>;
+    readonly sendPiThreadPrompt: RpcUnaryMethod<typeof WS_METHODS.serverSendPiThreadPrompt>;
   };
 }
 
@@ -207,6 +214,8 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
       getSettings: () => transport.request((client) => client[WS_METHODS.serverGetSettings]({})),
       updateSettings: (patch) =>
         transport.request((client) => client[WS_METHODS.serverUpdateSettings]({ patch })),
+      appendThreadStatusLog: (input) =>
+        transport.request((client) => client[WS_METHODS.serverAppendThreadStatusLog](input)),
       subscribeConfig: (listener, options) =>
         transport.subscribe(
           (client) => client[WS_METHODS.subscribeServerConfig]({}),
@@ -245,6 +254,16 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
           listener,
           options,
         ),
+    },
+    provider: {
+      getPiThreadRuntime: (input) =>
+        transport.request((client) => client[WS_METHODS.serverGetPiThreadRuntime](input)),
+      updatePiThreadRuntime: (input) =>
+        transport.request((client) => client[WS_METHODS.serverUpdatePiThreadRuntime](input)),
+      compactPiThread: (input) =>
+        transport.request((client) => client[WS_METHODS.serverCompactPiThread](input)),
+      sendPiThreadPrompt: (input) =>
+        transport.request((client) => client[WS_METHODS.serverSendPiThreadPrompt](input)),
     },
   };
 }

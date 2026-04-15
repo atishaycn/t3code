@@ -137,6 +137,11 @@ export interface PiSessionRuntimeController {
     threadId: ThreadId,
     customInstructions?: string,
   ): Promise<{ summary?: string } | undefined>;
+  sendPrompt(input: {
+    readonly threadId: ThreadId;
+    readonly message: string;
+    readonly streamingBehavior: "steer" | "followUp";
+  }): Promise<void>;
 }
 
 let activePiSessionRuntimeController: PiSessionRuntimeController | null = null;
@@ -404,6 +409,20 @@ export const PiAdapterLive = Layer.effect(
           throw new ProviderAdapterSessionNotFoundError({ provider: PROVIDER, threadId });
         }
         return session.process.compact(customInstructions);
+      },
+      sendPrompt: async (input) => {
+        const session = sessions.get(input.threadId);
+        if (!session) {
+          throw new ProviderAdapterSessionNotFoundError({
+            provider: PROVIDER,
+            threadId: input.threadId,
+          });
+        }
+        await session.process.prompt({
+          message: input.message,
+          streamingBehavior: input.streamingBehavior,
+        });
+        session.updatedAt = new Date().toISOString();
       },
     };
 

@@ -193,6 +193,48 @@ describe("CompactComposerControlsMenu", () => {
     });
   });
 
+  it("shows Pi runtime controls when provided", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const screen = await render(
+      <CompactComposerControlsMenu
+        activePlan={false}
+        interactionMode="default"
+        planSidebarLabel="Plan"
+        planSidebarOpen={false}
+        runtimeMode="approval-required"
+        piRuntime={{
+          steeringMode: "one-at-a-time",
+          followUpMode: "all",
+          autoCompactionEnabled: true,
+          sessionStatsLabel: "12 msgs · 1,200 tok · 2 queued",
+          onSteeringModeChange: vi.fn(),
+          onFollowUpModeChange: vi.fn(),
+          onAutoCompactionChange: vi.fn(),
+          onCompactNow: vi.fn(),
+        }}
+        onToggleInteractionMode={vi.fn()}
+        onTogglePlanSidebar={vi.fn()}
+        onRuntimeModeChange={vi.fn()}
+      />,
+      { container: host },
+    );
+
+    await page.getByLabelText("More composer controls").click();
+
+    await vi.waitFor(() => {
+      const text = document.body.textContent ?? "";
+      expect(text).toContain("Pi runtime");
+      expect(text).toContain("Steering queue");
+      expect(text).toContain("Follow-up queue");
+      expect(text).toContain("Disable auto-compaction");
+      expect(text).toContain("Compact now");
+    });
+
+    await screen.unmount();
+    host.remove();
+  });
+
   it("shows only the provided effort options", async () => {
     await using _ = await mountMenu({
       modelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },

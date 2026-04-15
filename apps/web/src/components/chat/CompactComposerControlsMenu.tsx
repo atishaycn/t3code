@@ -1,6 +1,6 @@
-import { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import { type PiQueueMode, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import { memo, type ReactNode } from "react";
-import { EllipsisIcon, ListTodoIcon } from "lucide-react";
+import { EllipsisIcon, ListTodoIcon, SparklesIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   Menu,
@@ -19,6 +19,18 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
   planSidebarOpen: boolean;
   runtimeMode: RuntimeMode;
   traitsMenuContent?: ReactNode;
+  piRuntime?: {
+    steeringMode: PiQueueMode;
+    followUpMode: PiQueueMode;
+    autoCompactionEnabled: boolean;
+    sessionStatsLabel?: string;
+    compacting?: boolean;
+    updating?: boolean;
+    onSteeringModeChange: (mode: PiQueueMode) => void;
+    onFollowUpModeChange: (mode: PiQueueMode) => void;
+    onAutoCompactionChange: (enabled: boolean) => void;
+    onCompactNow: () => void;
+  };
   onToggleInteractionMode: () => void;
   onTogglePlanSidebar: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
@@ -68,6 +80,58 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
           <MenuRadioItem value="auto-accept-edits">Auto-accept edits</MenuRadioItem>
           <MenuRadioItem value="full-access">Full access</MenuRadioItem>
         </MenuRadioGroup>
+        {props.piRuntime ? (
+          <>
+            <MenuDivider />
+            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Pi runtime</div>
+            <div className="px-2 pb-1 text-[11px] text-muted-foreground">
+              {props.piRuntime.sessionStatsLabel ?? "Session runtime controls"}
+            </div>
+            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
+              Steering queue
+            </div>
+            <MenuRadioGroup
+              value={props.piRuntime.steeringMode}
+              onValueChange={(value) => {
+                if (value === "all" || value === "one-at-a-time") {
+                  props.piRuntime?.onSteeringModeChange(value);
+                }
+              }}
+            >
+              <MenuRadioItem value="one-at-a-time">One at a time</MenuRadioItem>
+              <MenuRadioItem value="all">Deliver all</MenuRadioItem>
+            </MenuRadioGroup>
+            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
+              Follow-up queue
+            </div>
+            <MenuRadioGroup
+              value={props.piRuntime.followUpMode}
+              onValueChange={(value) => {
+                if (value === "all" || value === "one-at-a-time") {
+                  props.piRuntime?.onFollowUpModeChange(value);
+                }
+              }}
+            >
+              <MenuRadioItem value="one-at-a-time">One at a time</MenuRadioItem>
+              <MenuRadioItem value="all">Deliver all</MenuRadioItem>
+            </MenuRadioGroup>
+            <MenuDivider />
+            <MenuItem
+              onClick={() =>
+                props.piRuntime?.onAutoCompactionChange(!props.piRuntime?.autoCompactionEnabled)
+              }
+            >
+              <SparklesIcon className="size-4 shrink-0" />
+              {props.piRuntime.autoCompactionEnabled
+                ? "Disable auto-compaction"
+                : "Enable auto-compaction"}
+            </MenuItem>
+            <MenuItem onClick={props.piRuntime.onCompactNow}>
+              <SparklesIcon className="size-4 shrink-0" />
+              {props.piRuntime.compacting ? "Compacting…" : "Compact now"}
+            </MenuItem>
+          </>
+        ) : null}
         {props.activePlan ? (
           <>
             <MenuDivider />
