@@ -13,6 +13,8 @@ export function shouldPiTurnCompletionStayOpen(event: PiRpcEvent): boolean {
     case "turn_end":
     case "agent_end":
     case "queue_update":
+    case "compaction_start":
+    case "compaction_end":
       return false;
     default:
       return true;
