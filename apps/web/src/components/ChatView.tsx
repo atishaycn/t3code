@@ -37,7 +37,11 @@ import { usePrimaryEnvironmentId } from "../environments/primary";
 import { readEnvironmentApi } from "../environmentApi";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
-import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
+import {
+  parseDiffRouteSearch,
+  stripChatRouteSearchParams,
+  stripDiffSearchParams,
+} from "../diffRouteSearch";
 import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
@@ -141,6 +145,7 @@ import { NoActiveThreadState } from "./NoActiveThreadState";
 import { resolveEffectiveEnvMode, resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { ProviderStatusBanner } from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
+import { ForkContextTransferBanner } from "./chat/ForkContextTransferBanner";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
@@ -785,6 +790,18 @@ export default function ChatView(props: ChatViewProps) {
   const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
   const canCheckoutPullRequestIntoThread = isLocalDraftThread;
   const diffOpen = rawSearch.diff === "1";
+  const forkContextTransferMessage = useMemo(() => {
+    if (
+      rawSearch.forkContext !== "1" ||
+      !activeThread ||
+      !activeThread.messages.some((message) => message.role === "user") ||
+      activeThread.messages.some((message) => message.role === "assistant")
+    ) {
+      return null;
+    }
+
+    return activeThread.messages.find((message) => message.role === "user")?.text ?? null;
+  }, [activeThread, rawSearch.forkContext]);
   const activeThreadId = activeThread?.id ?? null;
   const activeThreadRef = useMemo(
     () => (activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null),
@@ -3042,6 +3059,10 @@ export default function ChatView(props: ChatViewProps) {
             environmentId: activeThread.environmentId,
             threadId: nextThreadId,
           },
+          search: (previous) => ({
+            ...stripChatRouteSearchParams(previous),
+            forkContext: "1",
+          }),
         });
       })
       .catch(async (err: unknown) => {
@@ -3361,6 +3382,7 @@ export default function ChatView(props: ChatViewProps) {
         error={activeThread.error}
         onDismiss={() => setThreadError(activeThread.id, null)}
       />
+      <ForkContextTransferBanner context={forkContextTransferMessage} />
       {/* Main content area with optional plan sidebar */}
       <div className="flex min-h-0 min-w-0 flex-1">
         {/* Chat column */}

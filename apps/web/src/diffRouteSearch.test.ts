@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseDiffRouteSearch } from "./diffRouteSearch";
+import { parseDiffRouteSearch, stripChatRouteSearchParams } from "./diffRouteSearch";
 
 describe("parseDiffRouteSearch", () => {
   it("parses valid diff search values", () => {
@@ -69,6 +69,32 @@ describe("parseDiffRouteSearch", () => {
 
     expect(parsed).toEqual({
       diff: "1",
+    });
+  });
+
+  it("parses fork context banner state", () => {
+    expect(
+      parseDiffRouteSearch({
+        forkContext: true,
+      }),
+    ).toEqual({
+      forkContext: "1",
+    });
+  });
+});
+
+describe("stripChatRouteSearchParams", () => {
+  it("removes chat-specific route state", () => {
+    expect(
+      stripChatRouteSearchParams({
+        diff: "1",
+        diffTurnId: "turn-1",
+        diffFilePath: "src/app.ts",
+        forkContext: "1",
+        keep: "value",
+      }),
+    ).toEqual({
+      keep: "value",
     });
   });
 });
