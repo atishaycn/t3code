@@ -57,6 +57,7 @@ Instead of installing [`karpathy/autoresearch`](https://github.com/karpathy/auto
 - experiments over vibes
 - simple wins over complex cleverness
 - keep going autonomously when the user wants autonomous research behavior
+- default to implementation instead of ending with offers for design docs, implementation plans, or next steps when the work can be done now
 
 That extension is available when:
 

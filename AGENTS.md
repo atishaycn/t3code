@@ -4,6 +4,9 @@
 
 - All of `bun fmt`, `bun lint`, and `bun typecheck` must pass before considering tasks completed.
 - NEVER run `bun test`. Always use `bun run test` (runs Vitest).
+- Do not stop at analysis, a design doc, an implementation plan, or a list of next steps when the requested change can be implemented in this repository now.
+- Do not end responses with offers like “I can turn this into a design doc” or “I can write an implementation plan” unless the user explicitly asked for planning instead of execution.
+- Default to execution. Only pause for confirmation when blocked by missing information, missing credentials, a destructive action, or an irreversible product choice with no sensible default.
 
 ## Project Snapshot
 
@@ -51,3 +54,18 @@ Docs:
 - Codex-Monitor (Tauri, feature-complete, strong reference implementation): https://github.com/Dimillian/CodexMonitor
 
 Use these as implementation references when designing protocol handling, UX flows, and operational safeguards.
+
+## Autonomy Default
+
+Assume the user wants the work completed end-to-end unless they explicitly ask for discussion only.
+
+That means:
+
+- inspect the relevant files
+- make the best reasonable change
+- run `bun fmt`
+- run `bun lint`
+- run `bun typecheck`
+- report what changed and any concrete remaining blocker
+
+Do not replace action with optional menus of follow-up work when the action is already available.

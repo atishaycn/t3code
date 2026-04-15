@@ -12,6 +12,7 @@ import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import { buildServerProvider, providerModelsFromSettings } from "../providerSnapshot";
 import { PiProvider } from "../Services/PiProvider";
 import { ServerSettingsService } from "../../serverSettings";
+import { ServerConfig } from "../../config";
 import {
   buildPiLauncherEnv,
   DEFAULT_PI_SCRIPT_PATH,
@@ -214,6 +215,7 @@ export const PiProviderLive = Layer.effect(
   PiProvider,
   Effect.gen(function* () {
     const serverSettings = yield* ServerSettingsService;
+    const config = yield* ServerConfig;
 
     const checkProvider = serverSettings.getSettings.pipe(
       Effect.flatMap((settings) => {
@@ -273,7 +275,7 @@ export const PiProviderLive = Layer.effect(
           try {
             const probe = await resolvePiProbe({
               binaryPath,
-              cwd: process.cwd(),
+              cwd: config.cwd,
               ...(Object.keys(launcherEnv).length > 0 ? { env: launcherEnv } : {}),
               enableAutoreason: piSettings.enableAutoreason,
               inheritExtensions: piSettings.inheritExtensions,
@@ -308,7 +310,7 @@ export const PiProviderLive = Layer.effect(
             try {
               extensions = await probePiExtensions({
                 env: launcherEnv,
-                cwd: process.cwd(),
+                cwd: config.cwd,
                 inheritExtensions: piSettings.inheritExtensions,
               });
             } catch {
