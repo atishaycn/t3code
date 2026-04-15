@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const LAST_PUSH_DMG_VERSION = "0.0.22";
+const LAST_PUSH_DMG_VERSION = "0.0.23";
 const SERVER_PACKAGE_JSON_PATH = new URL("../apps/server/package.json", import.meta.url);
 const DESKTOP_PACKAGE_JSON_PATH = new URL("../apps/desktop/package.json", import.meta.url);
 const PUSH_AND_BUILD_DMG_SCRIPT_PATH = new URL("./push-and-build-dmg.ts", import.meta.url);
