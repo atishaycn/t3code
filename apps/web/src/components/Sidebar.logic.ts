@@ -380,6 +380,10 @@ export function resolveThreadRowClassName(input: {
   return cn(baseClassName, "text-muted-foreground hover:bg-accent hover:text-foreground");
 }
 
+export function resolveThreadTitleClassName(input: { isPinned: boolean }): string {
+  return cn("min-w-0 flex-1 truncate text-xs", input.isPinned && "font-semibold text-foreground");
+}
+
 export function deriveThreadStatusDecision(input: {
   thread: ThreadStatusInput;
 }): ThreadStatusDecision {

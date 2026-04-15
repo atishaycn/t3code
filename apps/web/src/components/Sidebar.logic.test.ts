@@ -19,6 +19,7 @@ import {
   resolveSidebarNewThreadEnvMode,
   resolveThreadRowClassName,
   resolveThreadStatusPill,
+  resolveThreadTitleClassName,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
   THREAD_JUMP_HINT_SHOW_DELAY_MS,
@@ -705,6 +706,20 @@ describe("resolveThreadRowClassName", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: false });
     expect(className).toContain("bg-accent/85");
     expect(className).toContain("hover:bg-accent");
+  });
+});
+
+describe("resolveThreadTitleClassName", () => {
+  it("adds bold styling for pinned threads", () => {
+    const className = resolveThreadTitleClassName({ isPinned: true });
+    expect(className).toContain("font-semibold");
+    expect(className).toContain("text-foreground");
+  });
+
+  it("keeps the default styling for unpinned threads", () => {
+    const className = resolveThreadTitleClassName({ isPinned: false });
+    expect(className).toContain("truncate text-xs");
+    expect(className).not.toContain("font-semibold");
   });
 });
 

@@ -134,6 +134,7 @@ import {
   resolveSidebarNewThreadEnvMode,
   resolveThreadRowClassName,
   resolveThreadStatusPill,
+  resolveThreadTitleClassName,
   isThreadActivelyWorking,
   isThreadInCompletedSection,
   canMarkThreadDone,
@@ -673,7 +674,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               <TooltipTrigger
                 render={
                   <span className="min-w-0 flex-1" data-testid={`thread-title-${thread.id}`}>
-                    <span className="block truncate text-xs">{thread.title}</span>
+                    <span
+                      className={resolveThreadTitleClassName({
+                        isPinned: Boolean(thread.isPinned),
+                      })}
+                    >
+                      {thread.title}
+                    </span>
                     <span className="block truncate text-[10px] text-muted-foreground/60">
                       {contextLabel}
                     </span>
@@ -690,7 +697,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               <TooltipTrigger
                 render={
                   <span
-                    className="min-w-0 flex-1 truncate text-xs"
+                    className={resolveThreadTitleClassName({ isPinned: Boolean(thread.isPinned) })}
                     data-testid={`thread-title-${thread.id}`}
                   >
                     {thread.title}
