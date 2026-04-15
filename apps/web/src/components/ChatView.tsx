@@ -82,7 +82,11 @@ import {
   buildPlanImplementationPrompt,
   resolvePlanFollowUpSubmission,
 } from "../proposedPlan";
-import { buildForkChatPrompt, buildForkChatThreadTitle } from "../forkChat";
+import {
+  buildForkChatPrompt,
+  buildForkChatSummaryInstructions,
+  buildForkChatThreadTitle,
+} from "../forkChat";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -3001,16 +3005,31 @@ export default function ChatView(props: ChatViewProps) {
     const nextThreadId = newThreadId();
     const nextThreadTitle = buildForkChatThreadTitle(activeThread.title);
     const forkMessageId = newMessageId();
+    const piSummary =
+      activeThread.modelSelection.provider === "pi"
+        ? await api.provider
+            .compactPiThread({
+              threadId: activeThread.id,
+              customInstructions: buildForkChatSummaryInstructions(activeThread),
+            })
+            .then((result) => result.summary ?? null)
+        : null;
     const outgoingForkPrompt = formatOutgoingPrompt({
       provider: ctxSelectedProvider,
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: buildForkChatPrompt(activeThread, {
-        settings,
-        selectedProvider: ctxSelectedProvider,
-        selectedModelSelection: ctxSelectedModelSelection,
-      }),
+      text: buildForkChatPrompt(
+        activeThread,
+        {
+          settings,
+          selectedProvider: ctxSelectedProvider,
+          selectedModelSelection: ctxSelectedModelSelection,
+        },
+        {
+          piSummary,
+        },
+      ),
     });
     const nextThreadModelSelection: ModelSelection = ctxSelectedModelSelection;
 

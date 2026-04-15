@@ -2,7 +2,11 @@ import type { MessageId, TurnId } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vitest";
 
-import { buildForkChatPrompt, buildForkChatThreadTitle } from "./forkChat";
+import {
+  buildForkChatPrompt,
+  buildForkChatSummaryInstructions,
+  buildForkChatThreadTitle,
+} from "./forkChat";
 
 const asMessageId = (value: string) => value as MessageId;
 const asTurnId = (value: string) => value as TurnId;
@@ -13,6 +17,58 @@ describe("buildForkChatThreadTitle", () => {
     expect(buildForkChatThreadTitle("(fork) Debug sidebar layout")).toBe(
       "(fork) Debug sidebar layout",
     );
+  });
+});
+
+describe("buildForkChatSummaryInstructions", () => {
+  it("builds Pi compaction instructions tailored for a fork handoff", () => {
+    const instructions = buildForkChatSummaryInstructions({
+      title: "Debug sidebar layout",
+      branch: "feature/sidebar",
+      worktreePath: "/tmp/sidebar-worktree",
+      latestTurn: {
+        turnId: asTurnId("turn-2"),
+        state: "completed",
+        requestedAt: "2026-04-13T10:00:00.000Z",
+        startedAt: "2026-04-13T10:00:01.000Z",
+        completedAt: "2026-04-13T10:01:00.000Z",
+        assistantMessageId: asMessageId("assistant-2"),
+      },
+      proposedPlans: [
+        {
+          id: "plan-1",
+          turnId: asTurnId("turn-2"),
+          planMarkdown: "# Fix sidebar\n\n- tighten spacing\n- add a hover state",
+          implementedAt: null,
+          implementationThreadId: null,
+          createdAt: "2026-04-13T10:00:30.000Z",
+          updatedAt: "2026-04-13T10:00:30.000Z",
+        },
+      ],
+      messages: [
+        {
+          id: asMessageId("msg-1"),
+          role: "user",
+          text: "Can you debug the sidebar layout drift?",
+          createdAt: "2026-04-13T09:58:00.000Z",
+          streaming: false,
+        },
+        {
+          id: asMessageId("msg-2"),
+          role: "assistant",
+          text: "Yes — I found a flex regression in the header row.",
+          createdAt: "2026-04-13T09:59:00.000Z",
+          streaming: false,
+        },
+      ],
+    });
+
+    expect(instructions).toContain("Create a concise fork handoff summary for this conversation.");
+    expect(instructions).toContain("Original thread title: Debug sidebar layout");
+    expect(instructions).toContain("Current branch: feature/sidebar");
+    expect(instructions).toContain("Latest proposed plan:");
+    expect(instructions).toContain("Latest user request:");
+    expect(instructions).toContain("Latest assistant progress:");
   });
 });
 
@@ -144,6 +200,43 @@ describe("buildForkChatPrompt", () => {
     expect(prompt).toContain("- /autoreason enabled: yes");
     expect(prompt).toContain("- Full autonomy: yes");
     expect(prompt).toContain("- Custom models: openai/gpt-5");
+  });
+
+  it("prefers a Pi-generated summary when one is provided", () => {
+    const prompt = buildForkChatPrompt(
+      {
+        title: "Debug sidebar layout",
+        modelSelection: {
+          provider: "pi",
+          model: "openai/gpt-5",
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "feature/sidebar",
+        worktreePath: "/tmp/sidebar-worktree",
+        latestTurn: null,
+        proposedPlans: [],
+        messages: [
+          {
+            id: asMessageId("msg-1"),
+            role: "user",
+            text: "Can you debug the sidebar layout drift?",
+            createdAt: "2026-04-13T09:58:00.000Z",
+            streaming: false,
+          },
+        ],
+      },
+      undefined,
+      {
+        piSummary:
+          "Keep the flex header fix. The remaining work is to verify sidebar spacing in the worktree and ship the hover-state polish.",
+      },
+    );
+
+    expect(prompt).toContain(
+      "Keep the flex header fix. The remaining work is to verify sidebar spacing in the worktree and ship the hover-state polish.",
+    );
+    expect(prompt).not.toContain("- Thread focus: Debug sidebar layout");
   });
 
   it("omits middle transcript messages when the thread is long", () => {

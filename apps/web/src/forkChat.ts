@@ -10,6 +10,8 @@ const FORK_CHAT_TRANSCRIPT_HEAD_COUNT = 2;
 const FORK_CHAT_TRANSCRIPT_TAIL_COUNT = 8;
 const FORK_CHAT_PROMPT_PREFIX =
   "This thread is a fork of an earlier chat. Treat the compact handoff below as the carried-over context from the original thread.";
+const FORK_CHAT_SUMMARY_MAX_CHARS = 6_000;
+
 function compactWhitespace(value: string): string {
   return value
     .replace(/\r\n?/g, "\n")
@@ -183,6 +185,42 @@ export function buildForkChatThreadTitle(title: string): string {
   return truncate(`(fork) ${withoutExistingForkMarker}`);
 }
 
+export function buildForkChatSummaryInstructions(
+  thread: Pick<
+    Thread,
+    "title" | "branch" | "worktreePath" | "latestTurn" | "messages" | "proposedPlans"
+  >,
+): string {
+  const latestPlan = thread.proposedPlans.at(-1) ?? null;
+  const latestUserMessage = [...thread.messages]
+    .reverse()
+    .find((message) => message.role === "user");
+  const latestAssistantMessage = [...thread.messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+
+  return [
+    "Create a concise fork handoff summary for this conversation.",
+    "Focus on preserving the current objective, completed work, open questions, branch/worktree context, and the next best step.",
+    "Do not restate the full transcript. Do not mention compaction. Write the result so it can be pasted directly into a new thread as carried-over context.",
+    thread.title ? `Original thread title: ${thread.title}` : null,
+    thread.branch ? `Current branch: ${thread.branch}` : null,
+    thread.worktreePath ? `Current worktree: ${thread.worktreePath}` : null,
+    thread.latestTurn
+      ? `Latest turn state: ${thread.latestTurn.state} (requested ${thread.latestTurn.requestedAt})`
+      : null,
+    latestPlan ? `Latest proposed plan:\n${clipForkSection(latestPlan.planMarkdown, 1_200)}` : null,
+    latestUserMessage
+      ? `Latest user request:\n${clipForkSection(latestUserMessage.text, 1_000)}`
+      : null,
+    latestAssistantMessage
+      ? `Latest assistant progress:\n${clipForkSection(latestAssistantMessage.text, 1_200)}`
+      : null,
+  ]
+    .filter((line): line is string => Boolean(line && line.length > 0))
+    .join("\n\n");
+}
+
 export function buildForkChatPrompt(
   thread: Pick<
     Thread,
@@ -200,6 +238,9 @@ export function buildForkChatPrompt(
     settings: UnifiedSettings;
     selectedProvider: ProviderKind;
     selectedModelSelection: ModelSelection;
+  },
+  options?: {
+    piSummary?: string | null;
   },
 ): string {
   const selectedMessages = selectForkTranscriptMessages(thread.messages);
@@ -219,12 +260,14 @@ export function buildForkChatPrompt(
     );
   }
 
-  const workspaceSummary = buildForkWorkspaceSummary({
-    thread,
-    selectedMessages,
-    omittedMessageCount,
-    latestPlan,
-  });
+  const workspaceSummary = options?.piSummary
+    ? clipForkSection(options.piSummary, FORK_CHAT_SUMMARY_MAX_CHARS)
+    : buildForkWorkspaceSummary({
+        thread,
+        selectedMessages,
+        omittedMessageCount,
+        latestPlan,
+      });
 
   const metadataLines = [
     `- Original title: ${thread.title}`,
@@ -247,6 +290,7 @@ export function buildForkChatPrompt(
     "",
     "## Workspace summary",
     workspaceSummary,
+    options?.piSummary ? "" : null,
     "",
     "## Original thread metadata",
     metadataLines.join("\n"),
@@ -273,7 +317,7 @@ export function buildForkChatPrompt(
     transcriptLines.length > 0
       ? transcriptLines.join("\n\n")
       : "(No messages were present in the original thread.)",
-  ].filter((section) => section.length > 0);
+  ].filter((section): section is string => Boolean(section && section.length > 0));
 
   return clipForkSection(sections.join("\n"), FORK_CHAT_MAX_PROMPT_CHARS);
 }
