@@ -8,6 +8,7 @@ import * as readline from "node:readline";
 export const DEFAULT_PI_SCRIPT_PATH = "pi";
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 const DEFAULT_CLOSE_TIMEOUT_MS = 5_000;
+const DEFAULT_FORCE_KILL_TIMEOUT_MS = 1_000;
 const DEFAULT_PI_DEV_LAUNCHER_CANDIDATES = [
   Path.join(OS.homedir(), "Developer", "pi-mono", "pi-test.sh"),
   Path.join(OS.homedir(), "Developer", "pi-mono", "pi-test.cmd"),
@@ -453,24 +454,30 @@ function embeddedPiAgentDirForSource(sourceAgentDir: string): string {
 
 function sanitizePiAgentSettingsForEmbeddedRuntime(
   settings: Record<string, unknown>,
+  input?: { readonly inheritExtensions?: boolean },
 ): Record<string, unknown> {
   const sanitized: Record<string, unknown> = { ...settings };
+  const inheritExtensions = input?.inheritExtensions === true;
 
-  delete sanitized.extensions;
+  if (!inheritExtensions) {
+    delete sanitized.extensions;
+  }
   delete sanitized.skills;
   delete sanitized.prompts;
   delete sanitized.themes;
 
   if (Array.isArray(settings.packages)) {
-    sanitized.packages = settings.packages.flatMap((entry) => {
+    const packages: Array<string | Record<string, unknown>> = [];
+    for (const entry of settings.packages) {
       if (typeof entry === "string") {
-        return [{ source: entry, extensions: [] }];
+        packages.push(inheritExtensions ? entry : { source: entry, extensions: [] });
+        continue;
       }
       if (isRecord(entry) && typeof entry.source === "string" && entry.source.trim().length > 0) {
-        return [{ ...entry, extensions: [] }];
+        packages.push(inheritExtensions ? entry : { ...entry, extensions: [] });
       }
-      return [];
-    });
+    }
+    sanitized.packages = packages;
   }
 
   return sanitized;
@@ -497,6 +504,7 @@ async function syncPiAgentFile(sourcePath: string, destinationPath: string): Pro
 async function syncEmbeddedPiSettings(
   sourceAgentDir: string,
   destinationAgentDir: string,
+  input?: { readonly inheritExtensions?: boolean },
 ): Promise<void> {
   const sourceSettingsPath = Path.join(sourceAgentDir, "settings.json");
   const destinationSettingsPath = Path.join(destinationAgentDir, "settings.json");
@@ -515,7 +523,7 @@ async function syncEmbeddedPiSettings(
     return;
   }
 
-  const sanitized = `${JSON.stringify(sanitizePiAgentSettingsForEmbeddedRuntime(parsedSettings), null, 2)}\n`;
+  const sanitized = `${JSON.stringify(sanitizePiAgentSettingsForEmbeddedRuntime(parsedSettings, input), null, 2)}\n`;
   const existing = await FS.promises.readFile(destinationSettingsPath, "utf8").catch(() => null);
   if (existing === sanitized) {
     return;
@@ -524,14 +532,24 @@ async function syncEmbeddedPiSettings(
   await FS.promises.writeFile(destinationSettingsPath, sanitized, "utf8");
 }
 
-export async function prepareEmbeddedPiLauncherEnv(
-  env?: NodeJS.ProcessEnv,
-): Promise<NodeJS.ProcessEnv | undefined> {
+export async function prepareEmbeddedPiLauncherEnv(input?: {
+  readonly env?: NodeJS.ProcessEnv;
+  readonly inheritExtensions?: boolean;
+}): Promise<NodeJS.ProcessEnv | undefined> {
+  const env = input?.env;
   const sourceAgentDir = env?.PI_CODING_AGENT_DIR?.trim() || getDefaultPiAgentDir();
-  const destinationAgentDir = embeddedPiAgentDirForSource(sourceAgentDir);
+  const destinationAgentDir = embeddedPiAgentDirForSource(
+    `${sourceAgentDir}::inheritExtensions=${input?.inheritExtensions === true ? "1" : "0"}`,
+  );
   await FS.promises.mkdir(destinationAgentDir, { recursive: true });
   await Promise.all([
-    syncEmbeddedPiSettings(sourceAgentDir, destinationAgentDir),
+    syncEmbeddedPiSettings(
+      sourceAgentDir,
+      destinationAgentDir,
+      ...(typeof input?.inheritExtensions === "boolean"
+        ? [{ inheritExtensions: input.inheritExtensions }]
+        : []),
+    ),
     syncPiAgentFile(
       Path.join(sourceAgentDir, "auth.json"),
       Path.join(destinationAgentDir, "auth.json"),
@@ -683,6 +701,7 @@ export class PiRpcProcess {
     readonly cwd: string;
     readonly sessionFile: string;
     readonly env?: NodeJS.ProcessEnv;
+    readonly inheritExtensions?: boolean;
     readonly onEvent?: (event: PiRpcEvent) => void;
     readonly onExit?: (input: {
       readonly code: number | null;
@@ -699,7 +718,12 @@ export class PiRpcProcess {
     });
     await FS.promises.mkdir(Path.dirname(input.sessionFile), { recursive: true });
 
-    const preparedEnv = await prepareEmbeddedPiLauncherEnv(input.env);
+    const preparedEnv = await prepareEmbeddedPiLauncherEnv({
+      ...(input.env ? { env: input.env } : {}),
+      ...(typeof input.inheritExtensions === "boolean"
+        ? { inheritExtensions: input.inheritExtensions }
+        : {}),
+    });
     const child = ChildProcess.spawn(
       launcher.binaryPath,
       [...launcher.args, "--mode", "rpc", "--session", input.sessionFile],
@@ -809,24 +833,43 @@ export class PiRpcProcess {
     this.writeLine(response);
   }
 
-  async close(timeoutMs = DEFAULT_CLOSE_TIMEOUT_MS): Promise<void> {
+  async close(
+    timeoutMs = DEFAULT_CLOSE_TIMEOUT_MS,
+    forceKillTimeoutMs = DEFAULT_FORCE_KILL_TIMEOUT_MS,
+  ): Promise<void> {
     if (this.closed) {
       return;
     }
 
     this.process.stdin.end();
-    const timeout = new Promise<void>((resolve) => {
-      const timeoutId = setTimeout(() => {
-        clearTimeout(timeoutId);
-        if (!this.closed) {
-          this.process.kill("SIGTERM");
-        }
-        resolve();
-      }, timeoutMs);
-    });
+    await Promise.race([
+      this.exitPromise,
+      new Promise<void>((resolve) => {
+        const timeoutId = setTimeout(() => {
+          clearTimeout(timeoutId);
+          if (!this.closed) {
+            this.process.kill("SIGTERM");
+          }
+          resolve();
+        }, timeoutMs);
+      }),
+    ]);
+    if (this.closed) {
+      return;
+    }
 
-    await Promise.race([this.exitPromise, timeout]);
-    await this.exitPromise.catch(() => undefined);
+    await Promise.race([
+      this.exitPromise,
+      new Promise<void>((resolve) => {
+        const timeoutId = setTimeout(() => {
+          clearTimeout(timeoutId);
+          if (!this.closed) {
+            this.process.kill("SIGKILL");
+          }
+          resolve();
+        }, forceKillTimeoutMs);
+      }),
+    ]);
   }
 
   private async handleLine(line: string): Promise<void> {
@@ -904,6 +947,7 @@ export async function probePiVersion(input: {
   readonly binaryPath: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly enableAutoreason?: boolean;
+  readonly inheritExtensions?: boolean;
 }): Promise<string | null> {
   const launcher = resolvePiLauncherInvocation({
     binaryPath: input.binaryPath,
@@ -911,7 +955,12 @@ export async function probePiVersion(input: {
       ? { enableAutoreason: input.enableAutoreason }
       : {}),
   });
-  const preparedEnv = await prepareEmbeddedPiLauncherEnv(input.env);
+  const preparedEnv = await prepareEmbeddedPiLauncherEnv({
+    ...(input.env ? { env: input.env } : {}),
+    ...(typeof input.inheritExtensions === "boolean"
+      ? { inheritExtensions: input.inheritExtensions }
+      : {}),
+  });
   return new Promise<string | null>((resolve, reject) => {
     const child = ChildProcess.spawn(launcher.binaryPath, [...launcher.args, "--version"], {
       cwd: OS.homedir(),
@@ -949,6 +998,7 @@ export async function probePiModels(input: {
   readonly enableAutoreason?: boolean;
   readonly cwd: string;
   readonly env?: NodeJS.ProcessEnv;
+  readonly inheritExtensions?: boolean;
 }): Promise<ReadonlyArray<PiRpcModel>> {
   const sessionFile = Path.join(
     OS.tmpdir(),
@@ -962,6 +1012,9 @@ export async function probePiModels(input: {
     cwd: input.cwd,
     sessionFile,
     ...(input.env ? { env: input.env } : {}),
+    ...(typeof input.inheritExtensions === "boolean"
+      ? { inheritExtensions: input.inheritExtensions }
+      : {}),
   });
   try {
     return await process.getAvailableModels();
@@ -976,6 +1029,7 @@ export async function probePiCommands(input: {
   readonly enableAutoreason?: boolean;
   readonly cwd: string;
   readonly env?: NodeJS.ProcessEnv;
+  readonly inheritExtensions?: boolean;
 }): Promise<ReadonlyArray<PiRpcSlashCommand>> {
   const sessionFile = Path.join(
     OS.tmpdir(),
@@ -989,6 +1043,9 @@ export async function probePiCommands(input: {
     cwd: input.cwd,
     sessionFile,
     ...(input.env ? { env: input.env } : {}),
+    ...(typeof input.inheritExtensions === "boolean"
+      ? { inheritExtensions: input.inheritExtensions }
+      : {}),
   });
   try {
     return await process.getCommands();

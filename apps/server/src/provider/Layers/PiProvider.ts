@@ -114,6 +114,7 @@ async function resolvePiProbe(input: {
   readonly cwd: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly enableAutoreason?: boolean;
+  readonly inheritExtensions?: boolean;
 }): Promise<{
   readonly version: string | null;
   readonly models: ReadonlyArray<ServerProviderModel>;
@@ -125,6 +126,9 @@ async function resolvePiProbe(input: {
       ...(typeof input.enableAutoreason === "boolean"
         ? { enableAutoreason: input.enableAutoreason }
         : {}),
+      ...(typeof input.inheritExtensions === "boolean"
+        ? { inheritExtensions: input.inheritExtensions }
+        : {}),
     }),
     probePiModels({
       binaryPath: input.binaryPath,
@@ -132,6 +136,9 @@ async function resolvePiProbe(input: {
       ...(input.env ? { env: input.env } : {}),
       ...(typeof input.enableAutoreason === "boolean"
         ? { enableAutoreason: input.enableAutoreason }
+        : {}),
+      ...(typeof input.inheritExtensions === "boolean"
+        ? { inheritExtensions: input.inheritExtensions }
         : {}),
     }),
   ]);
@@ -147,6 +154,7 @@ function makePendingPiProvider(settings: {
   readonly homePath: string;
   readonly enableAutoreason: boolean;
   readonly fullAutonomy: boolean;
+  readonly inheritExtensions: boolean;
   readonly customModels: ReadonlyArray<string>;
 }) {
   const checkedAt = new Date().toISOString();
@@ -254,6 +262,7 @@ export const PiProviderLive = Layer.effect(
               cwd: process.cwd(),
               ...(Object.keys(launcherEnv).length > 0 ? { env: launcherEnv } : {}),
               enableAutoreason: piSettings.enableAutoreason,
+              inheritExtensions: piSettings.inheritExtensions,
             });
             return buildServerProvider({
               provider: PROVIDER,
@@ -275,6 +284,7 @@ export const PiProviderLive = Layer.effect(
                 binaryPath,
                 env: launcherEnv,
                 enableAutoreason: piSettings.enableAutoreason,
+                inheritExtensions: piSettings.inheritExtensions,
               });
             } catch {
               version = null;

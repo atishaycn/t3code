@@ -47,6 +47,25 @@ We are not accepting contributions yet.
 
 Observability guide: [docs/observability.md](./docs/observability.md)
 
+Local Markdown links in `README.md` and `docs/` are validated by `bun run docs:lint`, so keep repo-local documentation links relative and up to date.
+
+## Release helpers
+
+Build and ship a macOS DMG from the current branch with:
+
+```bash
+bun run push:dmg
+```
+
+Useful flags:
+
+- `--remote upstream`
+- `--branch main`
+- `--arch arm64`
+- `--signed`
+- `--verbose`
+- `--dry-run`
+
 ## If you REALLY want to contribute still.... read this first
 
 Before local development, prepare the environment and install dependencies:

@@ -85,6 +85,17 @@ export function useThreadActions() {
     [getCurrentRouteThreadRef, resolveThreadTarget],
   );
 
+  const setThreadPinned = useCallback(async (target: ScopedThreadRef, isPinned: boolean) => {
+    const api = readEnvironmentApi(target.environmentId);
+    if (!api) return;
+    await api.orchestration.dispatchCommand({
+      type: "thread.meta.update",
+      commandId: newCommandId(),
+      threadId: target.threadId,
+      isPinned,
+    });
+  }, []);
+
   const unarchiveThread = useCallback(async (target: ScopedThreadRef) => {
     const api = readEnvironmentApi(target.environmentId);
     if (!api) return;
@@ -272,6 +283,7 @@ export function useThreadActions() {
 
   return {
     archiveThread,
+    setThreadPinned,
     unarchiveThread,
     deleteThread,
     confirmAndDeleteThread,

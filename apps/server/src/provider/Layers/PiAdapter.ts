@@ -432,6 +432,7 @@ export const PiAdapterLive = Layer.effect(
       readonly binaryPath: string;
       readonly enableAutoreason: boolean;
       readonly fullAutonomy: boolean;
+      readonly inheritExtensions: boolean;
       readonly env: NodeJS.ProcessEnv;
     }> => {
       const settings = await runPromise(serverSettings.getSettings);
@@ -439,6 +440,7 @@ export const PiAdapterLive = Layer.effect(
         binaryPath: resolvePiLauncherPath(settings.providers.pi.binaryPath),
         enableAutoreason: settings.providers.pi.enableAutoreason,
         fullAutonomy: settings.providers.pi.fullAutonomy,
+        inheritExtensions: settings.providers.pi.inheritExtensions,
         env: buildPiLauncherEnv({
           homePath: settings.providers.pi.homePath,
           disableTelemetry: true,
@@ -1120,6 +1122,7 @@ export const PiAdapterLive = Layer.effect(
         binaryPath: launcherConfig.binaryPath,
         enableAutoreason: launcherConfig.enableAutoreason,
         fullAutonomy: launcherConfig.fullAutonomy,
+        inheritExtensions: launcherConfig.inheritExtensions,
         cwd: input.cwd,
         sessionFile: input.sessionFile,
         env: launcherConfig.env,

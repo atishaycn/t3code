@@ -72,6 +72,7 @@ export const PiSettings = Schema.Struct({
   homePath: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   enableAutoreason: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   fullAutonomy: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  inheritExtensions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type PiSettings = typeof PiSettings.Type;
@@ -181,6 +182,7 @@ const PiSettingsPatch = Schema.Struct({
   homePath: Schema.optionalKey(Schema.String),
   enableAutoreason: Schema.optionalKey(Schema.Boolean),
   fullAutonomy: Schema.optionalKey(Schema.Boolean),
+  inheritExtensions: Schema.optionalKey(Schema.Boolean),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 

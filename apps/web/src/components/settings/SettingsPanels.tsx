@@ -449,6 +449,8 @@ export function GeneralSettingsPanel() {
     pi: Boolean(
       settings.providers.pi.binaryPath !== DEFAULT_UNIFIED_SETTINGS.providers.pi.binaryPath ||
       settings.providers.pi.homePath !== DEFAULT_UNIFIED_SETTINGS.providers.pi.homePath ||
+      settings.providers.pi.inheritExtensions !==
+        DEFAULT_UNIFIED_SETTINGS.providers.pi.inheritExtensions ||
       settings.providers.pi.customModels.length > 0,
     ),
     claudeAgent: Boolean(
@@ -1201,6 +1203,32 @@ export function GeneralSettingsPanel() {
                             </span>
                           ) : null}
                         </label>
+                      </div>
+                    ) : null}
+
+                    {providerCard.provider === "pi" ? (
+                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                        <SettingsRow
+                          title="Inherit Pi extensions"
+                          description="Load extensions from your Pi home inside the embedded Pi runtime. Use this for extension-provided capabilities like sub-agents."
+                          control={
+                            <Switch
+                              checked={settings.providers.pi.inheritExtensions}
+                              onCheckedChange={(checked) =>
+                                updateSettings({
+                                  providers: {
+                                    ...settings.providers,
+                                    pi: {
+                                      ...settings.providers.pi,
+                                      inheritExtensions: Boolean(checked),
+                                    },
+                                  },
+                                })
+                              }
+                              aria-label="Inherit Pi extensions"
+                            />
+                          }
+                        />
                       </div>
                     ) : null}
 

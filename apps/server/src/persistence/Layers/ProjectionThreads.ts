@@ -1,6 +1,7 @@
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import { Effect, Layer, Schema, Struct } from "effect";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
@@ -13,9 +14,20 @@ import {
 } from "../Services/ProjectionThreads.ts";
 import { ModelSelection } from "@t3tools/contracts";
 
+const SqliteBoolean = Schema.Number.pipe(
+  Schema.decodeTo(
+    Schema.Boolean,
+    SchemaTransformation.transformOrFail({
+      decode: (value) => Effect.succeed(value !== 0),
+      encode: (value) => Effect.succeed(value ? 1 : 0),
+    }),
+  ),
+);
+
 const ProjectionThreadDbRow = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
+    isPinned: Schema.optional(SqliteBoolean),
   }),
 );
 type ProjectionThreadDbRow = typeof ProjectionThreadDbRow.Type;
@@ -36,6 +48,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           interaction_mode,
           branch,
           worktree_path,
+          is_pinned,
           latest_turn_id,
           created_at,
           updated_at,
@@ -55,6 +68,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.interactionMode},
           ${row.branch},
           ${row.worktreePath},
+          ${row.isPinned ? 1 : 0},
           ${row.latestTurnId},
           ${row.createdAt},
           ${row.updatedAt},
@@ -74,6 +88,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           interaction_mode = excluded.interaction_mode,
           branch = excluded.branch,
           worktree_path = excluded.worktree_path,
+          is_pinned = excluded.is_pinned,
           latest_turn_id = excluded.latest_turn_id,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at,
@@ -100,6 +115,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          is_pinned AS "isPinned",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -128,6 +144,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          is_pinned AS "isPinned",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",

@@ -47,11 +47,14 @@ export function getThreadSortTimestamp(
   return getLatestUserMessageTimestamp(thread);
 }
 
-export function sortThreads<T extends Pick<Thread, "id"> & ThreadSortInput>(
+export function sortThreads<T extends Pick<Thread, "id" | "isPinned"> & ThreadSortInput>(
   threads: readonly T[],
   sortOrder: SidebarThreadSortOrder,
 ): T[] {
   return threads.toSorted((left, right) => {
+    if (Boolean(left.isPinned) !== Boolean(right.isPinned)) {
+      return left.isPinned ? -1 : 1;
+    }
     const rightTimestamp = getThreadSortTimestamp(right, sortOrder);
     const leftTimestamp = getThreadSortTimestamp(left, sortOrder);
     const byTimestamp =
@@ -62,7 +65,7 @@ export function sortThreads<T extends Pick<Thread, "id"> & ThreadSortInput>(
 }
 
 export function getLatestThreadForProject<
-  T extends Pick<Thread, "id" | "projectId" | "archivedAt"> & ThreadSortInput,
+  T extends Pick<Thread, "id" | "projectId" | "archivedAt" | "isPinned"> & ThreadSortInput,
 >(threads: readonly T[], projectId: ProjectId, sortOrder: SidebarThreadSortOrder): T | null {
   return (
     sortThreads(

@@ -55,6 +55,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Docs lint
+        run: bun run docs:lint
+
       - name: Test
         run: bun run test
 
