@@ -149,6 +149,7 @@ async function resolvePiProbe(input: {
     }),
     probePiExtensions({
       ...(input.env ? { env: input.env } : {}),
+      cwd: input.cwd,
       ...(typeof input.inheritExtensions === "boolean"
         ? { inheritExtensions: input.inheritExtensions }
         : {}),
@@ -307,6 +308,7 @@ export const PiProviderLive = Layer.effect(
             try {
               extensions = await probePiExtensions({
                 env: launcherEnv,
+                cwd: process.cwd(),
                 inheritExtensions: piSettings.inheritExtensions,
               });
             } catch {

@@ -84,7 +84,7 @@ export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 export const ServerProviderExtension = Schema.Struct({
   name: TrimmedNonEmptyString,
   path: TrimmedNonEmptyString,
-  source: Schema.Literals(["user", "path", "package"]),
+  source: Schema.Literals(["user", "project", "path", "package"]),
 });
 export type ServerProviderExtension = typeof ServerProviderExtension.Type;
 

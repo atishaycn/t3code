@@ -572,6 +572,7 @@ async function listPiExtensionEntriesFromDirectory(
 
 async function listPiInheritedExtensions(input?: {
   readonly env?: NodeJS.ProcessEnv;
+  readonly cwd?: string;
 }): Promise<ReadonlyArray<ServerProviderExtension>> {
   const sourceAgentDir = input?.env?.PI_CODING_AGENT_DIR?.trim() || getDefaultPiAgentDir();
   const discovered = new Map<string, ServerProviderExtension>();
@@ -645,7 +646,16 @@ async function listPiInheritedExtensions(input?: {
     }
   }
 
-  return [...discovered.values()].toSorted((left, right) => left.name.localeCompare(right.name));
+  const cwd = input?.cwd?.trim();
+  if (cwd) {
+    addEntries(
+      await listPiExtensionEntriesFromDirectory(Path.join(cwd, ".pi", "extensions"), "project"),
+    );
+  }
+
+  return [...discovered.values()].toSorted(
+    (left, right) => left.source.localeCompare(right.source) || left.name.localeCompare(right.name),
+  );
 }
 
 function sanitizePiAgentSettingsForEmbeddedRuntime(
@@ -780,12 +790,16 @@ export async function prepareEmbeddedPiLauncherEnv(input?: {
 
 export async function probePiExtensions(input?: {
   readonly env?: NodeJS.ProcessEnv;
+  readonly cwd?: string;
   readonly inheritExtensions?: boolean;
 }): Promise<ReadonlyArray<ServerProviderExtension>> {
   if (!input?.inheritExtensions) {
     return [];
   }
-  return listPiInheritedExtensions(input.env ? { env: input.env } : undefined);
+  return listPiInheritedExtensions({
+    ...(input.env ? { env: input.env } : {}),
+    ...(input.cwd ? { cwd: input.cwd } : {}),
+  });
 }
 
 export function parsePiVersion(output: string): string | null {

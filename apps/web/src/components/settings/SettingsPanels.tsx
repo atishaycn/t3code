@@ -1212,7 +1212,7 @@ export function GeneralSettingsPanel() {
                         <div className="border-t border-border/60 px-4 py-3 sm:px-5">
                           <SettingsRow
                             title="Inherit Pi extensions"
-                            description="Load extensions from your Pi home inside the embedded Pi runtime. Use this for extension-provided capabilities like sub-agents."
+                            description="Load Pi extensions into the embedded Pi runtime. Includes Pi home extensions and project-local `.pi/extensions` from the current server workspace. Use this for extension-provided capabilities like sub-agents."
                             control={
                               <Switch
                                 checked={settings.providers.pi.inheritExtensions}
@@ -1242,7 +1242,7 @@ export function GeneralSettingsPanel() {
                               ? providerCard.extensions.length > 0
                                 ? `${providerCard.extensions.length} extension${providerCard.extensions.length === 1 ? "" : "s"} available to embedded Pi.`
                                 : "No inherited Pi extensions detected."
-                              : "Turn on extension inheritance to load and list Pi extensions here."}
+                              : "Turn on extension inheritance to load and list Pi home and project-local Pi extensions here."}
                           </div>
                           {settings.providers.pi.inheritExtensions &&
                           providerCard.extensions.length > 0 ? (
