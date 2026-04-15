@@ -17,7 +17,7 @@ describe("buildForkChatThreadTitle", () => {
 });
 
 describe("buildForkChatPrompt", () => {
-  it("includes metadata, plans, and a compact transcript handoff", () => {
+  it("includes a generated workspace summary, metadata, plans, and a compact transcript handoff", () => {
     const prompt = buildForkChatPrompt({
       title: "Debug sidebar layout",
       modelSelection: {
@@ -75,6 +75,13 @@ describe("buildForkChatPrompt", () => {
     });
 
     expect(prompt).toContain("This thread is a fork of an earlier chat.");
+    expect(prompt).toContain("## Workspace summary");
+    expect(prompt).toContain("- Thread focus: Debug sidebar layout");
+    expect(prompt).toContain("- Current goal/request: Can you debug the sidebar layout drift?");
+    expect(prompt).toContain(
+      "- Latest known progress: Yes — I found a flex regression in the header row.",
+    );
+    expect(prompt).toContain("- Referenced artifacts: sidebar.png");
     expect(prompt).toContain("## Original thread metadata");
     expect(prompt).toContain("- Model: codex/gpt-5");
     expect(prompt).toContain("- Branch: feature/sidebar");
@@ -83,7 +90,9 @@ describe("buildForkChatPrompt", () => {
     expect(prompt).toContain("1. USER: Can you debug the sidebar layout drift?");
     expect(prompt).toContain("[attachments: image:sidebar.png]");
     expect(prompt).toContain("2. ASSISTANT: Yes — I found a flex regression in the header row.");
-    expect(prompt).toContain("Do not start new work yet.");
+    expect(prompt).toContain(
+      "The summary below is the fork handoff. Treat it as the current workspace summary for the new thread.",
+    );
   });
 
   it("includes the current provider settings summary when available", () => {
@@ -160,6 +169,9 @@ describe("buildForkChatPrompt", () => {
     });
 
     expect(prompt).toContain("omitted 6 middle messages");
+    expect(prompt).toContain(
+      "- Transcript compression note: 6 middle messages were omitted from the detailed excerpt below.",
+    );
     expect(prompt).toContain("1. USER: message 1");
     expect(prompt).toContain("10. ASSISTANT: message 16");
   });

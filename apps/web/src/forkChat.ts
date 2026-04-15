@@ -53,6 +53,70 @@ function selectForkTranscriptMessages(messages: ReadonlyArray<ChatMessage>): Cha
   ];
 }
 
+function summarizeTranscriptMessages(messages: ReadonlyArray<ChatMessage>): string[] {
+  const latestUserMessage = [...messages].reverse().find((message) => message.role === "user");
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+  const attachmentNames = messages.flatMap((message) =>
+    (message.attachments ?? []).map((attachment) => attachment.name),
+  );
+
+  return [
+    ...(latestUserMessage
+      ? [`- Current goal/request: ${clipForkSection(latestUserMessage.text, 240)}`]
+      : []),
+    ...(latestAssistantMessage
+      ? [`- Latest known progress: ${clipForkSection(latestAssistantMessage.text, 280)}`]
+      : []),
+    ...(attachmentNames.length > 0
+      ? [
+          `- Referenced artifacts: ${attachmentNames.slice(0, 6).join(", ")}${attachmentNames.length > 6 ? ", …" : ""}`,
+        ]
+      : []),
+  ];
+}
+
+function buildForkWorkspaceSummary(input: {
+  thread: Pick<
+    Thread,
+    | "title"
+    | "modelSelection"
+    | "runtimeMode"
+    | "interactionMode"
+    | "branch"
+    | "worktreePath"
+    | "latestTurn"
+    | "messages"
+    | "proposedPlans"
+  >;
+  selectedMessages: ReadonlyArray<ChatMessage>;
+  omittedMessageCount: number;
+  latestPlan: Thread["proposedPlans"][number] | null;
+}): string {
+  const lines = [
+    `- Thread focus: ${input.thread.title}`,
+    ...summarizeTranscriptMessages(input.selectedMessages),
+    ...(input.latestPlan
+      ? [`- Current plan: ${clipForkSection(input.latestPlan.planMarkdown, 280)}`]
+      : []),
+    ...(input.thread.branch ? [`- Active branch: ${input.thread.branch}`] : []),
+    ...(input.thread.worktreePath ? [`- Worktree path: ${input.thread.worktreePath}`] : []),
+    ...(input.thread.latestTurn
+      ? [
+          `- Latest turn status: ${input.thread.latestTurn.state} (requested ${input.thread.latestTurn.requestedAt})`,
+        ]
+      : []),
+    ...(input.omittedMessageCount > 0
+      ? [
+          `- Transcript compression note: ${input.omittedMessageCount} middle message${input.omittedMessageCount === 1 ? " was" : "s were"} omitted from the detailed excerpt below.`,
+        ]
+      : []),
+  ];
+
+  return clipForkSection(lines.join("\n"), 2_000);
+}
+
 function formatProviderSettingsSummary(input: {
   settings: UnifiedSettings;
   provider: ProviderKind;
@@ -155,6 +219,13 @@ export function buildForkChatPrompt(
     );
   }
 
+  const workspaceSummary = buildForkWorkspaceSummary({
+    thread,
+    selectedMessages,
+    omittedMessageCount,
+    latestPlan,
+  });
+
   const metadataLines = [
     `- Original title: ${thread.title}`,
     `- Model: ${thread.modelSelection.provider}/${thread.modelSelection.model}`,
@@ -172,7 +243,10 @@ export function buildForkChatPrompt(
     "",
     "Please use this context to continue the work without redoing already completed steps. If the handoff is missing something important, say exactly what is missing.",
     "",
-    "Do not start new work yet. First, briefly acknowledge that you have the forked context and are ready for the next instruction.",
+    "The summary below is the fork handoff. Treat it as the current workspace summary for the new thread.",
+    "",
+    "## Workspace summary",
+    workspaceSummary,
     "",
     "## Original thread metadata",
     metadataLines.join("\n"),
