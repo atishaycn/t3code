@@ -4,7 +4,6 @@ export interface DiffRouteSearch {
   diff?: "1" | undefined;
   diffTurnId?: TurnId | undefined;
   diffFilePath?: string | undefined;
-  forkContext?: "1" | undefined;
 }
 
 function isDiffOpenValue(value: unknown): boolean {
@@ -28,15 +27,9 @@ export function stripDiffSearchParams<T extends Record<string, unknown>>(
 
 export function stripChatRouteSearchParams<T extends Record<string, unknown>>(
   params: T,
-): Omit<T, "diff" | "diffTurnId" | "diffFilePath" | "forkContext"> {
-  const {
-    diff: _diff,
-    diffTurnId: _diffTurnId,
-    diffFilePath: _diffFilePath,
-    forkContext: _forkContext,
-    ...rest
-  } = params;
-  return rest as Omit<T, "diff" | "diffTurnId" | "diffFilePath" | "forkContext">;
+): Omit<T, "diff" | "diffTurnId" | "diffFilePath"> {
+  const { diff: _diff, diffTurnId: _diffTurnId, diffFilePath: _diffFilePath, ...rest } = params;
+  return rest as Omit<T, "diff" | "diffTurnId" | "diffFilePath">;
 }
 
 export function parseDiffRouteSearch(search: Record<string, unknown>): DiffRouteSearch {
@@ -44,12 +37,10 @@ export function parseDiffRouteSearch(search: Record<string, unknown>): DiffRoute
   const diffTurnIdRaw = diff ? normalizeSearchString(search.diffTurnId) : undefined;
   const diffTurnId = diffTurnIdRaw ? TurnId.make(diffTurnIdRaw) : undefined;
   const diffFilePath = diff && diffTurnId ? normalizeSearchString(search.diffFilePath) : undefined;
-  const forkContext = isDiffOpenValue(search.forkContext) ? "1" : undefined;
 
   return {
     ...(diff ? { diff } : {}),
     ...(diffTurnId ? { diffTurnId } : {}),
     ...(diffFilePath ? { diffFilePath } : {}),
-    ...(forkContext ? { forkContext } : {}),
   };
 }
