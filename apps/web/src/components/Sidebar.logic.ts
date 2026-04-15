@@ -1,4 +1,8 @@
 import * as React from "react";
+import type {
+  ThreadStatusReason,
+  ThreadStatusLabel as DiagnosticThreadStatusLabel,
+} from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import {
   getThreadSortTimestamp,
@@ -36,6 +40,12 @@ export interface ThreadStatusPill {
   colorClass: string;
   dotClass: string;
   pulse: boolean;
+}
+
+export interface ThreadStatusDecision {
+  pill: ThreadStatusPill | null;
+  label: DiagnosticThreadStatusLabel | null;
+  reason: ThreadStatusReason;
 }
 
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
@@ -93,6 +103,14 @@ export function isThreadActivelyWorking(
 
 export function canMarkThreadDone(thread: Pick<ThreadStatusInput, "session">): boolean {
   return thread.session?.orchestrationStatus === "running";
+}
+
+export function isThreadInCompletedSection(thread: ThreadStatusInput): boolean {
+  if (isThreadActivelyWorking(thread) !== null) {
+    return false;
+  }
+
+  return resolveThreadStatusPill({ thread })?.label === "Completed";
 }
 
 export interface ThreadJumpHintVisibilityController {
@@ -362,26 +380,34 @@ export function resolveThreadRowClassName(input: {
   return cn(baseClassName, "text-muted-foreground hover:bg-accent hover:text-foreground");
 }
 
-export function resolveThreadStatusPill(input: {
+export function deriveThreadStatusDecision(input: {
   thread: ThreadStatusInput;
-}): ThreadStatusPill | null {
+}): ThreadStatusDecision {
   const { thread } = input;
 
   if (thread.hasPendingApprovals) {
     return {
       label: "Pending Approval",
-      colorClass: "text-amber-600 dark:text-amber-300/90",
-      dotClass: "bg-amber-500 dark:bg-amber-300/90",
-      pulse: false,
+      reason: "pending-approval",
+      pill: {
+        label: "Pending Approval",
+        colorClass: "text-amber-600 dark:text-amber-300/90",
+        dotClass: "bg-amber-500 dark:bg-amber-300/90",
+        pulse: false,
+      },
     };
   }
 
   if (thread.hasPendingUserInput) {
     return {
       label: "Awaiting Input",
-      colorClass: "text-indigo-600 dark:text-indigo-300/90",
-      dotClass: "bg-indigo-500 dark:bg-indigo-300/90",
-      pulse: false,
+      reason: "pending-user-input",
+      pill: {
+        label: "Awaiting Input",
+        colorClass: "text-indigo-600 dark:text-indigo-300/90",
+        dotClass: "bg-indigo-500 dark:bg-indigo-300/90",
+        pulse: false,
+      },
     };
   }
 
@@ -389,18 +415,26 @@ export function resolveThreadStatusPill(input: {
   if (activeWorkState === "working") {
     return {
       label: "Working",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
-      pulse: true,
+      reason: "actively-running",
+      pill: {
+        label: "Working",
+        colorClass: "text-sky-600 dark:text-sky-300/80",
+        dotClass: "bg-sky-500 dark:bg-sky-300/80",
+        pulse: true,
+      },
     };
   }
 
   if (activeWorkState === "connecting") {
     return {
       label: "Connecting",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
-      pulse: true,
+      reason: "session-connecting",
+      pill: {
+        label: "Connecting",
+        colorClass: "text-sky-600 dark:text-sky-300/80",
+        dotClass: "bg-sky-500 dark:bg-sky-300/80",
+        pulse: true,
+      },
     };
   }
 
@@ -412,22 +446,40 @@ export function resolveThreadStatusPill(input: {
   if (hasPlanReadyPrompt) {
     return {
       label: "Plan Ready",
-      colorClass: "text-violet-600 dark:text-violet-300/90",
-      dotClass: "bg-violet-500 dark:bg-violet-300/90",
-      pulse: false,
+      reason: "plan-ready",
+      pill: {
+        label: "Plan Ready",
+        colorClass: "text-violet-600 dark:text-violet-300/90",
+        dotClass: "bg-violet-500 dark:bg-violet-300/90",
+        pulse: false,
+      },
     };
   }
 
   if (hasUnseenCompletion(thread)) {
     return {
       label: "Completed",
-      colorClass: "text-emerald-600 dark:text-emerald-300/90",
-      dotClass: "bg-emerald-500 dark:bg-emerald-300/90",
-      pulse: false,
+      reason: "unseen-completion",
+      pill: {
+        label: "Completed",
+        colorClass: "text-emerald-600 dark:text-emerald-300/90",
+        dotClass: "bg-emerald-500 dark:bg-emerald-300/90",
+        pulse: false,
+      },
     };
   }
 
-  return null;
+  return {
+    pill: null,
+    label: null,
+    reason: "idle",
+  };
+}
+
+export function resolveThreadStatusPill(input: {
+  thread: ThreadStatusInput;
+}): ThreadStatusPill | null {
+  return deriveThreadStatusDecision(input).pill;
 }
 
 export function resolveProjectStatusIndicator(

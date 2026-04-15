@@ -135,6 +135,7 @@ import {
   resolveThreadRowClassName,
   resolveThreadStatusPill,
   isThreadActivelyWorking,
+  isThreadInCompletedSection,
   canMarkThreadDone,
   orderItemsByPreferredIds,
   shouldClearThreadSelectionOnMouseDown,
@@ -2107,19 +2108,21 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   );
 });
 
-interface SidebarWorkingThreadsSectionProps {
-  workingThreads: readonly SidebarThreadSummary[];
+interface SidebarThreadStatusSectionProps {
+  title: string;
+  threads: readonly SidebarThreadSummary[];
   routeThreadKey: string | null;
   threadSortOrder: SidebarThreadSortOrder;
   projectLabelByThreadKey: ReadonlyMap<string, string>;
   projectCwdByThreadKey: ReadonlyMap<string, string | null>;
 }
 
-const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
-  props: SidebarWorkingThreadsSectionProps,
+const SidebarThreadStatusSection = memo(function SidebarThreadStatusSection(
+  props: SidebarThreadStatusSectionProps,
 ) {
   const {
-    workingThreads,
+    title,
+    threads,
     routeThreadKey,
     threadSortOrder,
     projectLabelByThreadKey,
@@ -2148,21 +2151,21 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
   const threadByKey = useMemo(
     () =>
       new Map(
-        workingThreads.map(
+        threads.map(
           (thread) =>
             [scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)), thread] as const,
         ),
       ),
-    [workingThreads],
+    [threads],
   );
   const threadByKeyRef = useRef(threadByKey);
   threadByKeyRef.current = threadByKey;
-  const orderedWorkingThreadKeys = useMemo(
+  const orderedThreadKeys = useMemo(
     () =>
-      sortThreads(workingThreads, threadSortOrder).map((thread) =>
+      sortThreads(threads, threadSortOrder).map((thread) =>
         scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
       ),
-    [threadSortOrder, workingThreads],
+    [threadSortOrder, threads],
   );
 
   const navigateToThread = useCallback(
@@ -2434,18 +2437,18 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
     ],
   );
 
-  if (workingThreads.length === 0) return null;
+  if (threads.length === 0) return null;
 
   return (
     <SidebarGroup className="px-2 py-1">
       <div className="mb-1 flex items-center justify-between pl-2 pr-1.5">
         <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-          Working
+          {title}
         </span>
       </div>
       <SidebarMenu>
         <SidebarMenuSub className="mx-1 my-0 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0">
-          {sortThreads(workingThreads, threadSortOrder).map((thread) => {
+          {sortThreads(threads, threadSortOrder).map((thread) => {
             const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
             return (
               <SidebarThreadRow
@@ -2453,7 +2456,7 @@ const SidebarWorkingThreadsSection = memo(function SidebarWorkingThreadsSection(
                 thread={thread}
                 projectCwd={projectCwdByThreadKey.get(threadKey) ?? null}
                 contextLabel={projectLabelByThreadKey.get(threadKey) ?? null}
-                orderedProjectThreadKeys={orderedWorkingThreadKeys}
+                orderedProjectThreadKeys={orderedThreadKeys}
                 isActive={routeThreadKey === threadKey}
                 jumpLabel={null}
                 appSettingsConfirmThreadArchive={appSettingsConfirmThreadArchive}
@@ -2534,6 +2537,7 @@ interface SidebarProjectsContentProps {
   attachProjectListAutoAnimateRef: (node: HTMLElement | null) => void;
   projectsLength: number;
   workingThreads: readonly SidebarThreadSummary[];
+  completedThreads: readonly SidebarThreadSummary[];
   projectLabelByThreadKey: ReadonlyMap<string, string>;
   projectCwdByThreadKey: ReadonlyMap<string, string | null>;
 }
@@ -2590,6 +2594,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     attachProjectListAutoAnimateRef,
     projectsLength,
     workingThreads,
+    completedThreads,
     projectLabelByThreadKey,
     projectCwdByThreadKey,
   } = props;
@@ -2652,8 +2657,17 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>
-      <SidebarWorkingThreadsSection
-        workingThreads={workingThreads}
+      <SidebarThreadStatusSection
+        title="Working"
+        threads={workingThreads}
+        routeThreadKey={routeThreadKey}
+        threadSortOrder={threadSortOrder}
+        projectLabelByThreadKey={projectLabelByThreadKey}
+        projectCwdByThreadKey={projectCwdByThreadKey}
+      />
+      <SidebarThreadStatusSection
+        title="Completed"
+        threads={completedThreads}
         routeThreadKey={routeThreadKey}
         threadSortOrder={threadSortOrder}
         projectLabelByThreadKey={projectLabelByThreadKey}
@@ -3262,12 +3276,28 @@ export default function Sidebar() {
     () => sidebarThreads.filter((thread) => thread.archivedAt === null),
     [sidebarThreads],
   );
+  const threadLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
   const workingThreads = useMemo(
     () =>
       sidebarThreads.filter(
         (thread) => thread.archivedAt === null && isThreadActivelyWorking(thread) !== null,
       ),
     [sidebarThreads],
+  );
+  const completedThreads = useMemo(
+    () =>
+      sidebarThreads.filter((thread) => {
+        if (thread.archivedAt !== null) {
+          return false;
+        }
+        const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+        const lastVisitedAt = threadLastVisitedAtById[threadKey];
+        return isThreadInCompletedSection({
+          ...thread,
+          ...(lastVisitedAt ? { lastVisitedAt } : {}),
+        });
+      }),
+    [sidebarThreads, threadLastVisitedAtById],
   );
   const projectLabelByThreadKey = useMemo(() => {
     const mapping = new Map<string, string>();
@@ -3764,6 +3794,7 @@ export default function Sidebar() {
             attachProjectListAutoAnimateRef={attachProjectListAutoAnimateRef}
             projectsLength={projects.length}
             workingThreads={workingThreads}
+            completedThreads={completedThreads}
             projectLabelByThreadKey={projectLabelByThreadKey}
             projectCwdByThreadKey={projectCwdByThreadKey}
           />

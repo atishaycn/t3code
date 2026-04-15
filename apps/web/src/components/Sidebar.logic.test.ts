@@ -11,6 +11,7 @@ import {
   hasUnseenCompletion,
   isContextMenuPointerDown,
   isThreadActivelyWorking,
+  isThreadInCompletedSection,
   canMarkThreadDone,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
@@ -482,6 +483,55 @@ describe("isThreadActivelyWorking", () => {
         },
       }),
     ).toBeNull();
+  });
+});
+
+describe("isThreadInCompletedSection", () => {
+  const baseThread = {
+    hasActionableProposedPlan: false,
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    interactionMode: "default" as const,
+    latestTurn: makeLatestTurn(),
+    session: {
+      provider: "codex" as const,
+      status: "ready" as const,
+      createdAt: "2026-03-09T10:00:00.000Z",
+      updatedAt: "2026-03-09T10:05:00.000Z",
+      orchestrationStatus: "ready" as const,
+    },
+  };
+
+  it("returns true for unseen completed threads", () => {
+    expect(
+      isThreadInCompletedSection({
+        ...baseThread,
+        lastVisitedAt: "2026-03-09T10:04:00.000Z",
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false after the completion has been visited", () => {
+    expect(
+      isThreadInCompletedSection({
+        ...baseThread,
+        lastVisitedAt: "2026-03-09T10:06:00.000Z",
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false for actively working threads", () => {
+    expect(
+      isThreadInCompletedSection({
+        ...baseThread,
+        session: {
+          ...baseThread.session,
+          status: "running",
+          orchestrationStatus: "running",
+          activeTurnId: TurnId.make("turn-working"),
+        },
+      }),
+    ).toBe(false);
   });
 });
 
