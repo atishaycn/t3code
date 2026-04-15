@@ -2,7 +2,11 @@ import type { MessageId, TurnId } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vitest";
 
-import { buildForkChatPrompt, buildForkChatThreadTitle } from "./forkChat";
+import {
+  buildForkChatPrompt,
+  buildForkChatThreadTitle,
+  extractForkTransferredContext,
+} from "./forkChat";
 
 const asMessageId = (value: string) => value as MessageId;
 const asTurnId = (value: string) => value as TurnId;
@@ -13,6 +17,37 @@ describe("buildForkChatThreadTitle", () => {
     expect(buildForkChatThreadTitle("Debug sidebar layout (fork)")).toBe(
       "Debug sidebar layout (fork)",
     );
+  });
+});
+
+describe("extractForkTransferredContext", () => {
+  it("extracts the transferred context body from a fork prompt", () => {
+    const prompt = buildForkChatPrompt({
+      title: "Debug sidebar layout",
+      modelSelection: {
+        provider: "codex",
+        model: "gpt-5",
+      },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: "feature/sidebar",
+      worktreePath: "/tmp/sidebar-worktree",
+      latestTurn: null,
+      proposedPlans: [],
+      messages: [
+        {
+          id: asMessageId("msg-1"),
+          role: "user",
+          text: "Can you debug the sidebar layout drift?",
+          createdAt: "2026-04-13T09:58:00.000Z",
+          streaming: false,
+        },
+      ],
+    });
+
+    expect(extractForkTransferredContext(prompt)).toContain("## Original thread metadata");
+    expect(extractForkTransferredContext(prompt)).toContain("## Conversation transcript excerpt");
+    expect(extractForkTransferredContext("hello")).toBeNull();
   });
 });
 

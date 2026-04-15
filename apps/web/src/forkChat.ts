@@ -8,6 +8,9 @@ const FORK_CHAT_MAX_PLAN_CHARS = 4_000;
 const FORK_CHAT_MAX_MESSAGE_CHARS = 900;
 const FORK_CHAT_TRANSCRIPT_HEAD_COUNT = 2;
 const FORK_CHAT_TRANSCRIPT_TAIL_COUNT = 8;
+const FORK_CHAT_PROMPT_PREFIX =
+  "This thread is a fork of an earlier chat. Treat the compact handoff below as the carried-over context from the original thread.";
+const FORK_CHAT_CONTEXT_SECTION_MARKER = "## Original thread metadata";
 
 function compactWhitespace(value: string): string {
   return value
@@ -118,6 +121,20 @@ export function buildForkChatThreadTitle(title: string): string {
   );
 }
 
+export function extractForkTransferredContext(prompt: string): string | null {
+  const normalized = compactWhitespace(prompt);
+  if (!normalized.startsWith(FORK_CHAT_PROMPT_PREFIX)) {
+    return null;
+  }
+
+  const contextSectionIndex = normalized.indexOf(FORK_CHAT_CONTEXT_SECTION_MARKER);
+  if (contextSectionIndex < 0) {
+    return normalized;
+  }
+
+  return normalized.slice(contextSectionIndex).trim();
+}
+
 export function buildForkChatPrompt(
   thread: Pick<
     Thread,
@@ -167,7 +184,7 @@ export function buildForkChatPrompt(
   ];
 
   const sections = [
-    "This thread is a fork of an earlier chat. Treat the compact handoff below as the carried-over context from the original thread.",
+    FORK_CHAT_PROMPT_PREFIX,
     "",
     "Please use this context to continue the work without redoing already completed steps. If the handoff is missing something important, say exactly what is missing.",
     "",

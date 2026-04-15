@@ -82,7 +82,11 @@ import {
   buildPlanImplementationPrompt,
   resolvePlanFollowUpSubmission,
 } from "../proposedPlan";
-import { buildForkChatPrompt, buildForkChatThreadTitle } from "../forkChat";
+import {
+  buildForkChatPrompt,
+  buildForkChatThreadTitle,
+  extractForkTransferredContext,
+} from "../forkChat";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -791,16 +795,25 @@ export default function ChatView(props: ChatViewProps) {
   const canCheckoutPullRequestIntoThread = isLocalDraftThread;
   const diffOpen = rawSearch.diff === "1";
   const forkContextTransferMessage = useMemo(() => {
-    if (
-      rawSearch.forkContext !== "1" ||
-      !activeThread ||
-      !activeThread.messages.some((message) => message.role === "user") ||
-      activeThread.messages.some((message) => message.role === "assistant")
-    ) {
+    if (!activeThread) {
       return null;
     }
 
-    return activeThread.messages.find((message) => message.role === "user")?.text ?? null;
+    const firstUserMessage = activeThread.messages.find((message) => message.role === "user");
+    if (!firstUserMessage) {
+      return null;
+    }
+
+    const extractedContext = extractForkTransferredContext(firstUserMessage.text);
+    if (!extractedContext) {
+      return null;
+    }
+
+    if (rawSearch.forkContext === "1") {
+      return extractedContext;
+    }
+
+    return activeThread.title.toLowerCase().endsWith("(fork)") ? extractedContext : null;
   }, [activeThread, rawSearch.forkContext]);
   const activeThreadId = activeThread?.id ?? null;
   const activeThreadRef = useMemo(
