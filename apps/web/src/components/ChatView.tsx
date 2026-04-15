@@ -3425,6 +3425,7 @@ export default function ChatView(props: ChatViewProps) {
               resolvedTheme={resolvedTheme}
               timestampFormat={timestampFormat}
               workspaceRoot={activeWorkspaceRoot}
+              emptyStateProjectName={activeProject?.name ?? null}
               onIsAtEndChange={onIsAtEndChange}
             />
 

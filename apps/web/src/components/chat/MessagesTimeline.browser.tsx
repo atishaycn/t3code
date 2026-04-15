@@ -69,11 +69,31 @@ function buildProps() {
     resolvedTheme: "dark" as const,
     timestampFormat: "24-hour" as const,
     workspaceRoot: undefined,
+    emptyStateProjectName: null,
     onIsAtEndChange: vi.fn(),
   };
 }
 
 describe("MessagesTimeline", () => {
+  it("renders only the centered project name for an empty thread when provided", async () => {
+    const screen = await render(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[]}
+        emptyStateProjectName="Project Alpha"
+      />,
+    );
+
+    try {
+      await expect.element(page.getByText("Project Alpha")).toBeVisible();
+      await expect
+        .element(page.getByText("Send a message to start the conversation."))
+        .not.toBeInTheDocument();
+    } finally {
+      await screen.unmount();
+    }
+  });
+
   afterEach(() => {
     scrollToEndSpy.mockReset();
     getStateSpy.mockClear();

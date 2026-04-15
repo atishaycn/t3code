@@ -112,6 +112,7 @@ interface MessagesTimelineProps {
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
+  emptyStateProjectName?: string | null;
   onIsAtEndChange: (isAtEnd: boolean) => void;
 }
 
@@ -140,6 +141,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   resolvedTheme,
   timestampFormat,
   workspaceRoot,
+  emptyStateProjectName,
   onIsAtEndChange,
 }: MessagesTimelineProps) {
   const rawRows = useMemo(
@@ -239,8 +241,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   if (rows.length === 0 && !isWorking) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground/30">
-          Send a message to start the conversation.
+        <p className="text-center text-sm font-medium text-warning">
+          {emptyStateProjectName ?? "Send a message to start the conversation."}
         </p>
       </div>
     );
