@@ -47,6 +47,25 @@ We are not accepting contributions yet.
 
 Observability guide: [docs/observability.md](./docs/observability.md)
 
+## Pi autoresearch soul
+
+This repo ships a project-local Pi extension at [`.pi/extensions/autoresearch-soul.ts`](./.pi/extensions/autoresearch-soul.ts).
+
+Instead of installing [`karpathy/autoresearch`](https://github.com/karpathy/autoresearch) as a package, this extension distills its operating style into Pi's behavior:
+
+- empirical over speculative
+- experiments over vibes
+- simple wins over complex cleverness
+- keep going autonomously when the user wants autonomous research behavior
+
+That extension is available when:
+
+- you run `pi` from this repo
+- T3 Code launches the embedded Pi provider with Pi extension inheritance enabled
+- Pi RPC runs with this repo as the working directory
+
+You can inspect the active guidance inside Pi with `/autoresearch-principles`.
+
 Local Markdown links in `README.md` and `docs/` are validated by `bun run docs:lint`, so keep repo-local documentation links relative and up to date.
 
 ## Release helpers
