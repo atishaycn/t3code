@@ -133,6 +133,7 @@ import {
   resolveSidebarNewThreadEnvMode,
   resolveThreadRowClassName,
   resolveThreadStatusPill,
+  isThreadActivelyWorking,
   orderItemsByPreferredIds,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
@@ -436,8 +437,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     cwd: thread.branch != null ? gitCwd : null,
   });
   const isHighlighted = isActive || isSelected;
-  const isThreadRunning =
-    thread.session?.status === "running" && thread.session.activeTurnId != null;
+  const isThreadRunning = isThreadActivelyWorking(thread) === "working";
   const threadStatus = resolveThreadStatusPill({
     thread: {
       ...thread,
@@ -3217,9 +3217,7 @@ export default function Sidebar() {
   const workingThreads = useMemo(
     () =>
       sidebarThreads.filter(
-        (thread) =>
-          thread.archivedAt === null &&
-          (thread.session?.status === "running" || thread.session?.status === "connecting"),
+        (thread) => thread.archivedAt === null && isThreadActivelyWorking(thread) !== null,
       ),
     [sidebarThreads],
   );

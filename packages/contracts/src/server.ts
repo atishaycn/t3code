@@ -81,6 +81,13 @@ export const ServerProviderSkill = Schema.Struct({
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 
+export const ServerProviderExtension = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  path: TrimmedNonEmptyString,
+  source: Schema.Literals(["user", "path", "package"]),
+});
+export type ServerProviderExtension = typeof ServerProviderExtension.Type;
+
 export const ServerProvider = Schema.Struct({
   provider: ProviderKind,
   enabled: Schema.Boolean,
@@ -95,6 +102,7 @@ export const ServerProvider = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   skills: Schema.Array(ServerProviderSkill).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  extensions: Schema.optional(Schema.Array(ServerProviderExtension)),
 });
 export type ServerProvider = typeof ServerProvider.Type;
 

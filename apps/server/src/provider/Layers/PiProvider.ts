@@ -1,7 +1,11 @@
 import * as FS from "node:fs";
 import * as Path from "node:path";
 
-import type { ModelCapabilities, ServerProviderModel } from "@t3tools/contracts";
+import type {
+  ModelCapabilities,
+  ServerProviderExtension,
+  ServerProviderModel,
+} from "@t3tools/contracts";
 import { Duration, Effect, Equal, Layer, Stream } from "effect";
 
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
@@ -11,6 +15,7 @@ import { ServerSettingsService } from "../../serverSettings";
 import {
   buildPiLauncherEnv,
   DEFAULT_PI_SCRIPT_PATH,
+  probePiExtensions,
   probePiModels,
   probePiVersion,
   resolvePiLauncherPath,
@@ -118,8 +123,9 @@ async function resolvePiProbe(input: {
 }): Promise<{
   readonly version: string | null;
   readonly models: ReadonlyArray<ServerProviderModel>;
+  readonly extensions: ReadonlyArray<ServerProviderExtension>;
 }> {
-  const [version, models] = await Promise.all([
+  const [version, models, extensions] = await Promise.all([
     probePiVersion({
       binaryPath: input.binaryPath,
       ...(input.env ? { env: input.env } : {}),
@@ -141,10 +147,17 @@ async function resolvePiProbe(input: {
         ? { inheritExtensions: input.inheritExtensions }
         : {}),
     }),
+    probePiExtensions({
+      ...(input.env ? { env: input.env } : {}),
+      ...(typeof input.inheritExtensions === "boolean"
+        ? { inheritExtensions: input.inheritExtensions }
+        : {}),
+    }),
   ]);
   return {
     version,
     models: toServerProviderModels(models),
+    extensions,
   };
 }
 
@@ -269,6 +282,7 @@ export const PiProviderLive = Layer.effect(
               enabled: true,
               checkedAt,
               models: probe.models.length > 0 ? probe.models : fallbackModels,
+              ...(probe.extensions.length > 0 ? { extensions: probe.extensions } : {}),
               probe: {
                 installed: true,
                 version: probe.version,
@@ -279,6 +293,7 @@ export const PiProviderLive = Layer.effect(
             });
           } catch (error) {
             let version: string | null = null;
+            let extensions: ReadonlyArray<ServerProviderExtension> = [];
             try {
               version = await probePiVersion({
                 binaryPath,
@@ -289,11 +304,20 @@ export const PiProviderLive = Layer.effect(
             } catch {
               version = null;
             }
+            try {
+              extensions = await probePiExtensions({
+                env: launcherEnv,
+                inheritExtensions: piSettings.inheritExtensions,
+              });
+            } catch {
+              extensions = [];
+            }
             return buildServerProvider({
               provider: PROVIDER,
               enabled: true,
               checkedAt,
               models: fallbackModels,
+              ...(extensions.length > 0 ? { extensions } : {}),
               probe: {
                 installed: !isMissingLauncherError(error),
                 version,

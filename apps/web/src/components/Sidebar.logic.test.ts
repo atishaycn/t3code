@@ -10,6 +10,7 @@ import {
   getProjectSortTimestamp,
   hasUnseenCompletion,
   isContextMenuPointerDown,
+  isThreadActivelyWorking,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
   resolveSidebarNewThreadSeedContext,
@@ -20,7 +21,13 @@ import {
   sortProjectsForSidebar,
   THREAD_JUMP_HINT_SHOW_DELAY_MS,
 } from "./Sidebar.logic";
-import { EnvironmentId, OrchestrationLatestTurn, ProjectId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  OrchestrationLatestTurn,
+  ProjectId,
+  ThreadId,
+  TurnId,
+} from "@t3tools/contracts";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -429,6 +436,54 @@ describe("isContextMenuPointerDown", () => {
   });
 });
 
+describe("isThreadActivelyWorking", () => {
+  it("treats a running session with an active turn as working", () => {
+    expect(
+      isThreadActivelyWorking({
+        latestTurn: null,
+        session: {
+          provider: "codex" as const,
+          status: "running" as const,
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:00:00.000Z",
+          orchestrationStatus: "running" as const,
+          activeTurnId: TurnId.make("turn-1"),
+        },
+      }),
+    ).toBe("working");
+  });
+
+  it("treats a starting session as connecting", () => {
+    expect(
+      isThreadActivelyWorking({
+        latestTurn: null,
+        session: {
+          provider: "codex" as const,
+          status: "connecting" as const,
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:00:00.000Z",
+          orchestrationStatus: "starting" as const,
+        },
+      }),
+    ).toBe("connecting");
+  });
+
+  it("treats stale running sessions with a completed latest turn and no active turn as done", () => {
+    expect(
+      isThreadActivelyWorking({
+        latestTurn: makeLatestTurn(),
+        session: {
+          provider: "codex" as const,
+          status: "running" as const,
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:06:00.000Z",
+          orchestrationStatus: "running" as const,
+        },
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("resolveThreadStatusPill", () => {
   const baseThread = {
     hasActionableProposedPlan: false,
@@ -522,6 +577,25 @@ describe("resolveThreadStatusPill", () => {
             ...baseThread.session,
             status: "ready",
             orchestrationStatus: "ready",
+          },
+        },
+      }),
+    ).toMatchObject({ label: "Completed", pulse: false });
+  });
+
+  it("does not keep showing working for stale running sessions that already completed", () => {
+    expect(
+      resolveThreadStatusPill({
+        thread: {
+          ...baseThread,
+          interactionMode: "default",
+          latestTurn: makeLatestTurn(),
+          lastVisitedAt: "2026-03-09T10:04:00.000Z",
+          session: {
+            ...baseThread.session,
+            status: "running",
+            orchestrationStatus: "running",
+            activeTurnId: undefined,
           },
         },
       }),

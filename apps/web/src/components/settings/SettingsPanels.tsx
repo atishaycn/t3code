@@ -693,6 +693,7 @@ export function GeneralSettingsPanel() {
       isDirty: !Equal.equals(providerConfig, defaultProviderConfig),
       liveProvider,
       models,
+      extensions: liveProvider?.extensions ?? [],
       providerConfig,
       statusStyle: PROVIDER_STATUS_STYLES[statusKey],
       summary,
@@ -1207,29 +1208,67 @@ export function GeneralSettingsPanel() {
                     ) : null}
 
                     {providerCard.provider === "pi" ? (
-                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                        <SettingsRow
-                          title="Inherit Pi extensions"
-                          description="Load extensions from your Pi home inside the embedded Pi runtime. Use this for extension-provided capabilities like sub-agents."
-                          control={
-                            <Switch
-                              checked={settings.providers.pi.inheritExtensions}
-                              onCheckedChange={(checked) =>
-                                updateSettings({
-                                  providers: {
-                                    ...settings.providers,
-                                    pi: {
-                                      ...settings.providers.pi,
-                                      inheritExtensions: Boolean(checked),
+                      <>
+                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                          <SettingsRow
+                            title="Inherit Pi extensions"
+                            description="Load extensions from your Pi home inside the embedded Pi runtime. Use this for extension-provided capabilities like sub-agents."
+                            control={
+                              <Switch
+                                checked={settings.providers.pi.inheritExtensions}
+                                onCheckedChange={(checked) =>
+                                  updateSettings({
+                                    providers: {
+                                      ...settings.providers,
+                                      pi: {
+                                        ...settings.providers.pi,
+                                        inheritExtensions: Boolean(checked),
+                                      },
                                     },
-                                  },
-                                })
-                              }
-                              aria-label="Inherit Pi extensions"
-                            />
-                          }
-                        />
-                      </div>
+                                  })
+                                }
+                                aria-label="Inherit Pi extensions"
+                              />
+                            }
+                          />
+                        </div>
+
+                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                          <div className="text-xs font-medium text-foreground">
+                            Inherited extensions
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {settings.providers.pi.inheritExtensions
+                              ? providerCard.extensions.length > 0
+                                ? `${providerCard.extensions.length} extension${providerCard.extensions.length === 1 ? "" : "s"} available to embedded Pi.`
+                                : "No inherited Pi extensions detected."
+                              : "Turn on extension inheritance to load and list Pi extensions here."}
+                          </div>
+                          {settings.providers.pi.inheritExtensions &&
+                          providerCard.extensions.length > 0 ? (
+                            <div className="mt-2 space-y-1.5">
+                              {providerCard.extensions.map((extension) => (
+                                <div
+                                  key={`${extension.source}:${extension.path}`}
+                                  className="rounded-md border border-border/60 px-2.5 py-2"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
+                                      {extension.name}
+                                    </span>
+                                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                                      {extension.source}
+                                    </span>
+                                  </div>
+                                  <code className="mt-1 block break-all text-[11px] text-muted-foreground">
+                                    {extension.path}
+                                  </code>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </>
                     ) : null}
 
                     <div className="border-t border-border/60 px-4 py-3 sm:px-5">

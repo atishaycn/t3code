@@ -59,6 +59,38 @@ type ThreadStatusInput = Pick<
   lastVisitedAt?: string | undefined;
 };
 
+export function isThreadActivelyWorking(
+  thread: Pick<ThreadStatusInput, "latestTurn" | "session">,
+): "working" | "connecting" | null {
+  const orchestrationStatus = thread.session?.orchestrationStatus;
+
+  if (orchestrationStatus === "starting") {
+    return "connecting";
+  }
+
+  if (orchestrationStatus === "running") {
+    if (thread.session?.activeTurnId != null) {
+      return "working";
+    }
+
+    if (thread.latestTurn?.state === "running") {
+      return "working";
+    }
+
+    if (!thread.latestTurn?.completedAt) {
+      return "working";
+    }
+
+    return null;
+  }
+
+  if (thread.session?.status === "connecting") {
+    return "connecting";
+  }
+
+  return null;
+}
+
 export interface ThreadJumpHintVisibilityController {
   sync: (shouldShow: boolean) => void;
   dispose: () => void;
@@ -349,7 +381,8 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.session?.status === "running") {
+  const activeWorkState = isThreadActivelyWorking(thread);
+  if (activeWorkState === "working") {
     return {
       label: "Working",
       colorClass: "text-sky-600 dark:text-sky-300/80",
@@ -358,7 +391,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.session?.status === "connecting") {
+  if (activeWorkState === "connecting") {
     return {
       label: "Connecting",
       colorClass: "text-sky-600 dark:text-sky-300/80",

@@ -5,6 +5,8 @@ import * as OS from "node:os";
 import * as Path from "node:path";
 import * as readline from "node:readline";
 
+import type { ServerProviderExtension } from "@t3tools/contracts";
+
 export const DEFAULT_PI_SCRIPT_PATH = "pi";
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 const DEFAULT_CLOSE_TIMEOUT_MS = 5_000;
@@ -32,6 +34,8 @@ export interface PiRpcSlashCommand {
   readonly name: string;
   readonly description?: string;
   readonly source: PiRpcSlashCommandSource;
+  readonly location?: "user" | "project" | "path";
+  readonly path?: string;
 }
 
 export interface PiRpcSessionState {
@@ -452,6 +456,178 @@ function embeddedPiAgentDirForSource(sourceAgentDir: string): string {
   return Path.join(EMBEDDED_PI_AGENT_DIR_ROOT, digest);
 }
 
+function normalizePiPath(inputPath: string, baseDir: string): string {
+  if (inputPath === "~") {
+    return OS.homedir();
+  }
+  if (inputPath.startsWith("~/") || inputPath.startsWith("~\\")) {
+    return Path.join(OS.homedir(), inputPath.slice(2));
+  }
+  if (Path.isAbsolute(inputPath)) {
+    return inputPath;
+  }
+  return Path.resolve(baseDir, inputPath);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await FS.promises.access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function syncPiAgentDirectoryLink(
+  sourcePath: string,
+  destinationPath: string,
+): Promise<void> {
+  const exists = await pathExists(sourcePath);
+  if (!exists) {
+    await FS.promises.rm(destinationPath, { recursive: true, force: true }).catch(() => undefined);
+    return;
+  }
+
+  const current = await FS.promises.readlink(destinationPath).catch(() => null);
+  if (current === sourcePath) {
+    return;
+  }
+
+  const stat = await FS.promises.lstat(destinationPath).catch(() => null);
+  if (stat) {
+    await FS.promises.rm(destinationPath, { recursive: true, force: true });
+  }
+
+  await FS.promises.mkdir(Path.dirname(destinationPath), { recursive: true });
+  await FS.promises.symlink(
+    sourcePath,
+    destinationPath,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+}
+
+async function listPiExtensionEntriesFromDirectory(
+  directoryPath: string,
+  source: ServerProviderExtension["source"],
+): Promise<ServerProviderExtension[]> {
+  const exists = await pathExists(directoryPath);
+  if (!exists) {
+    return [];
+  }
+
+  const entries = await FS.promises.readdir(directoryPath, { withFileTypes: true });
+  const discovered: ServerProviderExtension[] = [];
+
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) {
+      continue;
+    }
+    const entryPath = Path.join(directoryPath, entry.name);
+    if (entry.isFile() && /\.(?:[cm]?js|tsx?)$/i.test(entry.name)) {
+      discovered.push({
+        name: entry.name.replace(/\.(?:[cm]?js|tsx?)$/i, ""),
+        path: entryPath,
+        source,
+      });
+      continue;
+    }
+    if (entry.isDirectory()) {
+      const indexCandidates = ["index.ts", "index.tsx", "index.js", "index.mjs", "index.cjs"];
+      for (const candidate of indexCandidates) {
+        const candidatePath = Path.join(entryPath, candidate);
+        if (await pathExists(candidatePath)) {
+          discovered.push({
+            name: entry.name,
+            path: candidatePath,
+            source,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  return discovered;
+}
+
+async function listPiInheritedExtensions(input?: {
+  readonly env?: NodeJS.ProcessEnv;
+}): Promise<ReadonlyArray<ServerProviderExtension>> {
+  const sourceAgentDir = input?.env?.PI_CODING_AGENT_DIR?.trim() || getDefaultPiAgentDir();
+  const discovered = new Map<string, ServerProviderExtension>();
+
+  const addEntries = (entries: ReadonlyArray<ServerProviderExtension>) => {
+    for (const entry of entries) {
+      discovered.set(entry.path, entry);
+    }
+  };
+
+  addEntries(
+    await listPiExtensionEntriesFromDirectory(Path.join(sourceAgentDir, "extensions"), "user"),
+  );
+
+  const settingsPath = Path.join(sourceAgentDir, "settings.json");
+  const parsedSettings = await FS.promises
+    .readFile(settingsPath, "utf8")
+    .then((content) => JSON.parse(content) as unknown)
+    .catch(() => null);
+
+  if (isRecord(parsedSettings) && Array.isArray(parsedSettings.extensions)) {
+    for (const entry of parsedSettings.extensions) {
+      const normalized = asTrimmedString(entry);
+      if (!normalized) {
+        continue;
+      }
+      const marker = normalized[0];
+      const rawPath =
+        marker === "+" || marker === "-" || marker === "!" ? normalized.slice(1) : normalized;
+      if (!rawPath) {
+        continue;
+      }
+      const resolvedPath = normalizePiPath(rawPath, sourceAgentDir);
+      const stats = await FS.promises.stat(resolvedPath).catch(() => null);
+      if (!stats) {
+        continue;
+      }
+      if (stats.isDirectory()) {
+        addEntries(await listPiExtensionEntriesFromDirectory(resolvedPath, "path"));
+        continue;
+      }
+      const parsed = Path.parse(resolvedPath);
+      discovered.set(resolvedPath, {
+        name: parsed.name,
+        path: resolvedPath,
+        source: "path",
+      });
+    }
+  }
+
+  if (isRecord(parsedSettings) && Array.isArray(parsedSettings.packages)) {
+    for (const entry of parsedSettings.packages) {
+      if (typeof entry === "string") {
+        discovered.set(`package:${entry}`, {
+          name: entry,
+          path: entry,
+          source: "package",
+        });
+        continue;
+      }
+      if (isRecord(entry)) {
+        const source = asTrimmedString(entry.source);
+        if (source) {
+          discovered.set(`package:${source}`, {
+            name: source,
+            path: source,
+            source: "package",
+          });
+        }
+      }
+    }
+  }
+
+  return [...discovered.values()].toSorted((left, right) => left.name.localeCompare(right.name));
+}
+
 function sanitizePiAgentSettingsForEmbeddedRuntime(
   settings: Record<string, unknown>,
   input?: { readonly inheritExtensions?: boolean },
@@ -558,12 +734,38 @@ export async function prepareEmbeddedPiLauncherEnv(input?: {
       Path.join(sourceAgentDir, "models.json"),
       Path.join(destinationAgentDir, "models.json"),
     ),
+    ...(input?.inheritExtensions
+      ? [
+          syncPiAgentDirectoryLink(
+            Path.join(sourceAgentDir, "extensions"),
+            Path.join(destinationAgentDir, "extensions"),
+          ),
+          syncPiAgentDirectoryLink(
+            Path.join(sourceAgentDir, "git"),
+            Path.join(destinationAgentDir, "git"),
+          ),
+          syncPiAgentDirectoryLink(
+            Path.join(sourceAgentDir, "npm"),
+            Path.join(destinationAgentDir, "npm"),
+          ),
+        ]
+      : []),
   ]);
 
   return {
     ...env,
     PI_CODING_AGENT_DIR: destinationAgentDir,
   };
+}
+
+export async function probePiExtensions(input?: {
+  readonly env?: NodeJS.ProcessEnv;
+  readonly inheritExtensions?: boolean;
+}): Promise<ReadonlyArray<ServerProviderExtension>> {
+  if (!input?.inheritExtensions) {
+    return [];
+  }
+  return listPiInheritedExtensions(input.env ? { env: input.env } : undefined);
 }
 
 export function parsePiVersion(output: string): string | null {
