@@ -894,6 +894,52 @@ describe("deriveWorkLogEntries", () => {
     });
   });
 
+  it("uses runtime warning messages as work log preview text", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "runtime-warning-message",
+        kind: "runtime.warning",
+        summary: "Runtime warning",
+        tone: "info",
+        payload: {
+          message: "Provider got slow",
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry).toMatchObject({
+      label: "Runtime warning",
+      detail: "Provider got slow",
+      tone: "info",
+    });
+  });
+
+  it("includes structured runtime warning detail so pi stats stay visible", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "runtime-warning-structured",
+        kind: "runtime.warning",
+        summary: "Runtime warning",
+        tone: "info",
+        payload: {
+          message: "Turn stats",
+          detail: {
+            tps: 27.4,
+            inputTokens: 1532,
+            outputTokens: 244,
+            totalCostUsd: 0.0142,
+          },
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry?.detail).toBe(
+      'Turn stats — {"tps":27.4,"inputTokens":1532,"outputTokens":244,"totalCostUsd":0.0142}',
+    );
+  });
+
   it("extracts changed file paths for file-change tool activities", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

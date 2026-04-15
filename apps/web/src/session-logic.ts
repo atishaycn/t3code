@@ -529,16 +529,9 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   };
   const itemType = extractWorkLogItemType(payload);
   const requestKind = extractWorkLogRequestKind(payload);
-  if (
-    !taskDetailAsLabel &&
-    payload &&
-    typeof payload.detail === "string" &&
-    payload.detail.length > 0
-  ) {
-    const detail = stripTrailingExitCode(payload.detail).output;
-    if (detail) {
-      entry.detail = detail;
-    }
+  const detail = extractWorkLogDetail(activity, payload, taskDetailAsLabel !== null);
+  if (detail) {
+    entry.detail = detail;
   }
   if (commandPreview.command) {
     entry.command = commandPreview.command;
@@ -644,6 +637,61 @@ function deriveToolLifecycleCollapseKey(entry: DerivedWorkLogEntry): string | un
     return undefined;
   }
   return [itemType, normalizedLabel, detail].join("\u001f");
+}
+
+function extractWorkLogDetail(
+  activity: OrchestrationThreadActivity,
+  payload: Record<string, unknown> | null,
+  suppressStringDetail: boolean,
+): string | undefined {
+  if (!payload) {
+    return undefined;
+  }
+
+  const formattedMessage = asTrimmedString(payload.message);
+  const formattedDetail = formatWorkLogDetailValue(payload.detail, {
+    stripExitCode: activity.kind === "tool.updated" || activity.kind === "tool.completed",
+    suppressStringDetail,
+  });
+
+  if (
+    (activity.kind === "runtime.warning" || activity.kind === "runtime.error") &&
+    formattedMessage
+  ) {
+    if (formattedDetail && formattedDetail !== formattedMessage) {
+      return `${formattedMessage} — ${formattedDetail}`;
+    }
+    return formattedMessage;
+  }
+
+  return formattedDetail;
+}
+
+function formatWorkLogDetailValue(
+  value: unknown,
+  options: { stripExitCode: boolean; suppressStringDetail: boolean },
+): string | undefined {
+  if (typeof value === "string") {
+    if (options.suppressStringDetail || value.length === 0) {
+      return undefined;
+    }
+    return options.stripExitCode ? (stripTrailingExitCode(value).output ?? undefined) : value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  try {
+    const formatted = JSON.stringify(value);
+    return typeof formatted === "string" && formatted.length > 0 ? formatted : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function normalizeCompactToolLabel(value: string): string {
