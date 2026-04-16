@@ -107,7 +107,7 @@ function createBaseServerConfig(): ServerConfig {
           inheritExtensions: false,
           customModels: [],
         },
-        claudeAgent: { enabled: true, binaryPath: "", customModels: [] },
+        claudeAgent: { enabled: true, binaryPath: "", customModels: [], launchArgs: "" },
       },
     },
   };
