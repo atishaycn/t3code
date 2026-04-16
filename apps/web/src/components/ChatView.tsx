@@ -2664,7 +2664,7 @@ export default function ChatView(props: ChatViewProps) {
               ...(isLocalDraftThread
                 ? {
                     createThread: {
-                      projectId: activeProject.id,
+                      projectId: activeThread.projectId,
                       title,
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,
@@ -3111,12 +3111,26 @@ export default function ChatView(props: ChatViewProps) {
 
   const onForkChat = useCallback(async () => {
     const api = readEnvironmentApi(environmentId);
-    if (!api || !activeThread || !activeProject || !isServerThread || !canForkChat) {
+    if (!activeThread || !isServerThread || !canForkChat) {
+      return;
+    }
+
+    if (!api) {
+      toastManager.add({
+        type: "error",
+        title: "Could not fork chat",
+        description: "The environment API is unavailable right now.",
+      });
       return;
     }
 
     const sendCtx = composerRef.current?.getSendContext();
     if (!sendCtx) {
+      toastManager.add({
+        type: "error",
+        title: "Could not fork chat",
+        description: "The composer is still initializing. Try again in a moment.",
+      });
       return;
     }
     const {
@@ -3182,7 +3196,7 @@ export default function ChatView(props: ChatViewProps) {
         type: "thread.create",
         commandId: newCommandId(),
         threadId: nextThreadId,
-        projectId: activeProject.id,
+        projectId: activeThread.projectId,
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,
         runtimeMode,
@@ -3240,7 +3254,6 @@ export default function ChatView(props: ChatViewProps) {
       })
       .then(finish, finish);
   }, [
-    activeProject,
     activeThreadBranch,
     activeThread,
     beginLocalDispatch,

@@ -7,11 +7,12 @@ import {
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime";
 import { memo } from "react";
+import { cn } from "~/lib/utils";
 import GitActionsControl from "../GitActionsControl";
 import { type DraftId } from "~/composerDraftStore";
 import { DiffIcon, GitForkIcon, TerminalSquareIcon } from "lucide-react";
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
+import { buttonVariants } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ProjectScriptsControl, { type NewProjectScriptInput } from "../ProjectScriptsControl";
 import { Toggle } from "../ui/toggle";
@@ -125,16 +126,15 @@ export const ChatHeader = memo(function ChatHeader({
         <Tooltip>
           <TooltipTrigger
             render={
-              <Button
-                className="shrink-0"
+              <button
+                type="button"
+                className={cn(buttonVariants({ variant: "outline", size: "icon-xs" }), "shrink-0")}
                 onClick={onForkChat}
                 aria-label="Fork chat"
-                variant="outline"
-                size="icon-xs"
                 disabled={forkDisabled}
               >
                 <GitForkIcon className="size-3" />
-              </Button>
+              </button>
             }
           />
           <TooltipPopup side="bottom">
