@@ -50,6 +50,8 @@ export function createEnvironmentApi(rpcClient: WsRpcClient): EnvironmentApi {
       updatePiThreadRuntime: rpcClient.provider.updatePiThreadRuntime,
       compactPiThread: rpcClient.provider.compactPiThread,
       sendPiThreadPrompt: rpcClient.provider.sendPiThreadPrompt,
+      updatePiQueuedPrompt: rpcClient.provider.updatePiQueuedPrompt,
+      cancelPiQueuedPrompt: rpcClient.provider.cancelPiQueuedPrompt,
     },
   };
 }

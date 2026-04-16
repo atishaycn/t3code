@@ -1008,6 +1008,8 @@ function resolveWsRpc(body: NormalizedWsRpcRequestBody): unknown {
         autoCompactionEnabled: true,
         messageCount: 10,
         pendingMessageCount: 0,
+        queuedPrompts: [],
+        steeringPrompts: [],
       },
       stats: {
         sessionId: "pi-session-browser",
@@ -1052,6 +1054,8 @@ function resolveWsRpc(body: NormalizedWsRpcRequestBody): unknown {
           typeof body.autoCompactionEnabled === "boolean" ? body.autoCompactionEnabled : true,
         messageCount: 10,
         pendingMessageCount: 0,
+        queuedPrompts: [],
+        steeringPrompts: [],
       },
     };
   }

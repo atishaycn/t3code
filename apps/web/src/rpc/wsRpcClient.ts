@@ -125,6 +125,8 @@ export interface WsRpcClient {
     readonly updatePiThreadRuntime: RpcUnaryMethod<typeof WS_METHODS.serverUpdatePiThreadRuntime>;
     readonly compactPiThread: RpcUnaryMethod<typeof WS_METHODS.serverCompactPiThread>;
     readonly sendPiThreadPrompt: RpcUnaryMethod<typeof WS_METHODS.serverSendPiThreadPrompt>;
+    readonly updatePiQueuedPrompt: RpcUnaryMethod<typeof WS_METHODS.serverUpdatePiQueuedPrompt>;
+    readonly cancelPiQueuedPrompt: RpcUnaryMethod<typeof WS_METHODS.serverCancelPiQueuedPrompt>;
   };
 }
 
@@ -270,6 +272,10 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[WS_METHODS.serverCompactPiThread](input)),
       sendPiThreadPrompt: (input) =>
         transport.request((client) => client[WS_METHODS.serverSendPiThreadPrompt](input)),
+      updatePiQueuedPrompt: (input) =>
+        transport.request((client) => client[WS_METHODS.serverUpdatePiQueuedPrompt](input)),
+      cancelPiQueuedPrompt: (input) =>
+        transport.request((client) => client[WS_METHODS.serverCancelPiQueuedPrompt](input)),
     },
   };
 }

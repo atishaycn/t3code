@@ -123,6 +123,7 @@ async function mountMenu(props?: { modelSelection?: ModelSelection; prompt?: str
     <CompactComposerControlsMenu
       activePlan={false}
       interactionMode="default"
+      showInteractionModeControls={true}
       planSidebarLabel="Plan"
       planSidebarOpen={false}
       runtimeMode="approval-required"
@@ -200,6 +201,7 @@ describe("CompactComposerControlsMenu", () => {
       <CompactComposerControlsMenu
         activePlan={false}
         interactionMode="default"
+        showInteractionModeControls={false}
         planSidebarLabel="Plan"
         planSidebarOpen={false}
         runtimeMode="approval-required"
@@ -229,6 +231,9 @@ describe("CompactComposerControlsMenu", () => {
       expect(text).toContain("Follow-up queue");
       expect(text).toContain("Disable auto-compaction");
       expect(text).toContain("Compact now");
+      expect(text).not.toContain("Mode");
+      expect(text).not.toContain("Chat");
+      expect(text).not.toContain("Plan");
     });
 
     await screen.unmount();

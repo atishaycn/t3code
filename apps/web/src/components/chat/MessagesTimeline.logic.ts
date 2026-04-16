@@ -27,6 +27,7 @@ export type MessagesTimelineRow =
       showCompletionDivider: boolean;
       showAssistantCopyButton: boolean;
       isQueued: boolean;
+      isSteering: boolean;
       assistantTurnDiffSummary?: TurnDiffSummary | undefined;
       revertTurnCount?: number | undefined;
     }
@@ -116,6 +117,7 @@ export function deriveMessagesTimelineRows(input: {
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
   queuedUserMessageIds?: ReadonlySet<MessageId>;
+  steeringUserMessageIds?: ReadonlySet<MessageId>;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
@@ -174,6 +176,9 @@ export function deriveMessagesTimelineRows(input: {
       isQueued:
         timelineEntry.message.role === "user" &&
         (input.queuedUserMessageIds?.has(timelineEntry.message.id) ?? false),
+      isSteering:
+        timelineEntry.message.role === "user" &&
+        (input.steeringUserMessageIds?.has(timelineEntry.message.id) ?? false),
       assistantTurnDiffSummary:
         timelineEntry.message.role === "assistant"
           ? input.turnDiffSummaryByAssistantMessageId.get(timelineEntry.message.id)
@@ -238,6 +243,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.showCompletionDivider === bm.showCompletionDivider &&
         a.showAssistantCopyButton === bm.showAssistantCopyButton &&
         a.isQueued === bm.isQueued &&
+        a.isSteering === bm.isSteering &&
         a.assistantTurnDiffSummary === bm.assistantTurnDiffSummary &&
         a.revertTurnCount === bm.revertTurnCount
       );

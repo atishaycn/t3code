@@ -79,6 +79,8 @@ describe("ServerProvider", () => {
         autoCompactionEnabled: true,
         messageCount: 12,
         pendingMessageCount: 2,
+        queuedPrompts: [],
+        steeringPrompts: [],
       },
       stats: {
         sessionId: "pi-session-1",

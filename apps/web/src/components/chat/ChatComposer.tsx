@@ -175,6 +175,7 @@ const terminalContextIdListsEqual = (
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
+  showInteractionModeControls: boolean;
   showPlanToggle: boolean;
   planSidebarLabel: string;
   planSidebarOpen: boolean;
@@ -187,27 +188,31 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
 
   return (
     <>
-      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+      {props.showInteractionModeControls ? (
+        <>
+          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
 
-      <Button
-        variant="ghost"
-        className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
-        size="sm"
-        type="button"
-        onClick={props.onToggleInteractionMode}
-        title={
-          props.interactionMode === "plan"
-            ? "Plan mode — click to return to normal build mode"
-            : "Default mode — click to enter plan mode"
-        }
-      >
-        <BotIcon />
-        <span className="sr-only sm:not-sr-only">
-          {props.interactionMode === "plan" ? "Plan" : "Build"}
-        </span>
-      </Button>
+          <Button
+            variant="ghost"
+            className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            size="sm"
+            type="button"
+            onClick={props.onToggleInteractionMode}
+            title={
+              props.interactionMode === "plan"
+                ? "Plan mode — click to return to normal build mode"
+                : "Default mode — click to enter plan mode"
+            }
+          >
+            <BotIcon />
+            <span className="sr-only sm:not-sr-only">
+              {props.interactionMode === "plan" ? "Plan" : "Build"}
+            </span>
+          </Button>
 
-      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+        </>
+      ) : null}
 
       <Select
         value={props.runtimeMode}
@@ -820,6 +825,8 @@ export const ChatComposer = memo(
     );
     const workspaceEntries = workspaceEntriesQuery.data?.entries ?? EMPTY_PROJECT_ENTRIES;
 
+    const supportsInteractionModeControls = selectedProvider !== "pi";
+
     const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
       if (!composerTrigger) return [];
       if (composerTrigger.kind === "path") {
@@ -836,25 +843,29 @@ export const ChatComposer = memo(
         const builtInSlashCommandItems = [
           {
             id: "slash:model",
-            type: "slash-command",
-            command: "model",
+            type: "slash-command" as const,
+            command: "model" as const,
             label: "/model",
             description: "Switch response model for this thread",
           },
-          {
-            id: "slash:plan",
-            type: "slash-command",
-            command: "plan",
-            label: "/plan",
-            description: "Switch this thread into plan mode",
-          },
-          {
-            id: "slash:default",
-            type: "slash-command",
-            command: "default",
-            label: "/default",
-            description: "Switch this thread back to normal build mode",
-          },
+          ...(supportsInteractionModeControls
+            ? [
+                {
+                  id: "slash:plan",
+                  type: "slash-command" as const,
+                  command: "plan" as const,
+                  label: "/plan",
+                  description: "Switch this thread into plan mode",
+                },
+                {
+                  id: "slash:default",
+                  type: "slash-command" as const,
+                  command: "default" as const,
+                  label: "/default",
+                  description: "Switch this thread back to normal build mode",
+                },
+              ]
+            : []),
         ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
         const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
           (command) => ({
@@ -912,6 +923,7 @@ export const ChatComposer = memo(
       searchableModelOptions,
       selectedProvider,
       selectedProviderStatus,
+      supportsInteractionModeControls,
       workspaceEntries,
     ]);
 
@@ -1594,7 +1606,7 @@ export const ChatComposer = memo(
       key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
       event: KeyboardEvent,
     ) => {
-      if (key === "Tab" && event.shiftKey) {
+      if (key === "Tab" && event.shiftKey && supportsInteractionModeControls) {
         toggleInteractionMode();
         return true;
       }
@@ -2128,6 +2140,7 @@ export const ChatComposer = memo(
                     <CompactComposerControlsMenu
                       activePlan={showPlanSidebarToggle}
                       interactionMode={interactionMode}
+                      showInteractionModeControls={supportsInteractionModeControls}
                       planSidebarLabel={planSidebarLabel}
                       planSidebarOpen={planSidebarOpen}
                       runtimeMode={runtimeMode}
@@ -2151,6 +2164,7 @@ export const ChatComposer = memo(
                       <ComposerFooterModeControls
                         interactionMode={interactionMode}
                         runtimeMode={runtimeMode}
+                        showInteractionModeControls={supportsInteractionModeControls}
                         showPlanToggle={showPlanSidebarToggle}
                         planSidebarLabel={planSidebarLabel}
                         planSidebarOpen={planSidebarOpen}
@@ -2167,6 +2181,7 @@ export const ChatComposer = memo(
                           <CompactComposerControlsMenu
                             activePlan={false}
                             interactionMode={interactionMode}
+                            showInteractionModeControls={supportsInteractionModeControls}
                             planSidebarLabel={planSidebarLabel}
                             planSidebarOpen={planSidebarOpen}
                             runtimeMode={runtimeMode}

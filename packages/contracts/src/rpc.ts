@@ -73,6 +73,10 @@ import {
   ServerSendPiThreadPromptInput,
   ServerSendPiThreadPromptResult,
   ServerGetPiThreadRuntimeResult,
+  ServerUpdatePiQueuedPromptInput,
+  ServerUpdatePiQueuedPromptResult,
+  ServerCancelPiQueuedPromptInput,
+  ServerCancelPiQueuedPromptResult,
   ServerLifecycleStreamEvent,
   ServerPiThreadRuntimeError,
   ServerProviderUpdatedPayload,
@@ -130,6 +134,8 @@ export const WS_METHODS = {
   serverUpdatePiThreadRuntime: "server.updatePiThreadRuntime",
   serverCompactPiThread: "server.compactPiThread",
   serverSendPiThreadPrompt: "server.sendPiThreadPrompt",
+  serverUpdatePiQueuedPrompt: "server.updatePiQueuedPrompt",
+  serverCancelPiQueuedPrompt: "server.cancelPiQueuedPrompt",
 
   // Streaming subscriptions
   subscribeGitStatus: "subscribeGitStatus",
@@ -195,6 +201,18 @@ export const WsServerCompactPiThreadRpc = Rpc.make(WS_METHODS.serverCompactPiThr
 export const WsServerSendPiThreadPromptRpc = Rpc.make(WS_METHODS.serverSendPiThreadPrompt, {
   payload: ServerSendPiThreadPromptInput,
   success: ServerSendPiThreadPromptResult,
+  error: ServerPiThreadRuntimeError,
+});
+
+export const WsServerUpdatePiQueuedPromptRpc = Rpc.make(WS_METHODS.serverUpdatePiQueuedPrompt, {
+  payload: ServerUpdatePiQueuedPromptInput,
+  success: ServerUpdatePiQueuedPromptResult,
+  error: ServerPiThreadRuntimeError,
+});
+
+export const WsServerCancelPiQueuedPromptRpc = Rpc.make(WS_METHODS.serverCancelPiQueuedPrompt, {
+  payload: ServerCancelPiQueuedPromptInput,
+  success: ServerCancelPiQueuedPromptResult,
   error: ServerPiThreadRuntimeError,
 });
 
@@ -408,6 +426,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerUpdatePiThreadRuntimeRpc,
   WsServerCompactPiThreadRpc,
   WsServerSendPiThreadPromptRpc,
+  WsServerUpdatePiQueuedPromptRpc,
+  WsServerCancelPiQueuedPromptRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,

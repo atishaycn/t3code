@@ -29,12 +29,13 @@ import { applyClaudePromptEffortPrefix } from "@t3tools/shared/model";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import { truncate } from "@t3tools/shared/String";
 import { Debouncer } from "@tanstack/react-pacer";
+import { useQuery } from "@tanstack/react-query";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 import { useGitStatus } from "~/lib/gitStatusState";
 import { usePrimaryEnvironmentId } from "../environments/primary";
-import { readEnvironmentApi } from "../environmentApi";
+import { ensureEnvironmentApi, readEnvironmentApi } from "../environmentApi";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
 import {
@@ -670,9 +671,6 @@ export default function ChatView(props: ChatViewProps) {
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
   optimisticUserMessagesRef.current = optimisticUserMessages;
-  const [queuedPiFollowUpMessageIds, setQueuedPiFollowUpMessageIds] = useState<Set<MessageId>>(
-    () => new Set(),
-  );
   const pendingOptimisticUserMessagesByThreadIdRef = useRef<Record<string, ChatMessage[]>>({});
   const [localDraftErrorsByDraftId, setLocalDraftErrorsByDraftId] = useState<
     Record<string, string | null>
@@ -798,6 +796,28 @@ export default function ChatView(props: ChatViewProps) {
   const canCheckoutPullRequestIntoThread = isLocalDraftThread;
   const diffOpen = rawSearch.diff === "1";
   const activeThreadId = activeThread?.id ?? null;
+  const isPiRuntimeThread =
+    routeKind === "server" &&
+    activeThreadId !== null &&
+    (activeThread?.session?.provider === "pi" || activeThread?.modelSelection.provider === "pi");
+  const piRuntimeQuery = useQuery({
+    queryKey: ["pi-thread-runtime", environmentId, activeThreadId],
+    enabled: isPiRuntimeThread,
+    queryFn: () =>
+      ensureEnvironmentApi(environmentId).provider.getPiThreadRuntime({
+        threadId: activeThreadId!,
+      }),
+    refetchInterval: (query) => {
+      const state = query.state.data?.state;
+      if (!state) return false;
+      return state.isStreaming ||
+        state.pendingMessageCount > 0 ||
+        state.queuedPrompts.length > 0 ||
+        state.steeringPrompts.length > 0
+        ? 1000
+        : false;
+    },
+  });
   const activeThreadRef = useMemo(
     () => (activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null),
     [activeThread],
@@ -1299,6 +1319,49 @@ export default function ChatView(props: ChatViewProps) {
       }
     };
   }, [attachmentPreviewHandoffByMessageId, clearAttachmentPreviewHandoff, serverMessages]);
+  const pendingPiPromptMessages = useMemo(() => {
+    const state = piRuntimeQuery.data?.state;
+    if (!state) {
+      return [] as Array<ChatMessage & { pendingKind: "queued" | "steering" }>;
+    }
+    return [
+      ...state.queuedPrompts.map((prompt) => ({
+        id: prompt.messageId,
+        role: "user" as const,
+        text: prompt.message,
+        createdAt: prompt.createdAt,
+        streaming: false,
+        pendingKind: "queued" as const,
+      })),
+      ...state.steeringPrompts.map((prompt) => ({
+        id: prompt.messageId,
+        role: "user" as const,
+        text: prompt.message,
+        createdAt: prompt.createdAt,
+        streaming: false,
+        pendingKind: "steering" as const,
+      })),
+    ];
+  }, [piRuntimeQuery.data?.state]);
+  const queuedUserMessageIds = useMemo(
+    () =>
+      new Set(
+        pendingPiPromptMessages
+          .filter((message) => message.pendingKind === "queued")
+          .map((message) => message.id),
+      ),
+    [pendingPiPromptMessages],
+  );
+  const steeringUserMessageIds = useMemo(
+    () =>
+      new Set(
+        pendingPiPromptMessages
+          .filter((message) => message.pendingKind === "steering")
+          .map((message) => message.id),
+      ),
+    [pendingPiPromptMessages],
+  );
+
   const timelineMessages = useMemo(() => {
     const messages = serverMessages ?? [];
     const serverMessagesWithPreviewHandoff =
@@ -1342,16 +1405,30 @@ export default function ChatView(props: ChatViewProps) {
             return changed ? { ...message, attachments } : message;
           });
 
-    if (optimisticUserMessages.length === 0) {
-      return serverMessagesWithPreviewHandoff;
-    }
     const serverIds = new Set(serverMessagesWithPreviewHandoff.map((message) => message.id));
-    const pendingMessages = optimisticUserMessages.filter((message) => !serverIds.has(message.id));
-    if (pendingMessages.length === 0) {
+    const pendingRuntimeMessages = pendingPiPromptMessages.filter(
+      (message) => !serverIds.has(message.id),
+    );
+    const pendingOptimisticMessages = optimisticUserMessages.filter(
+      (message) => !serverIds.has(message.id),
+    );
+    if (pendingRuntimeMessages.length === 0 && pendingOptimisticMessages.length === 0) {
       return serverMessagesWithPreviewHandoff;
     }
-    return [...serverMessagesWithPreviewHandoff, ...pendingMessages];
-  }, [serverMessages, attachmentPreviewHandoffByMessageId, optimisticUserMessages]);
+    return [
+      ...serverMessagesWithPreviewHandoff,
+      ...pendingRuntimeMessages,
+      ...pendingOptimisticMessages.filter(
+        (message) =>
+          !pendingRuntimeMessages.some((runtimeMessage) => runtimeMessage.id === message.id),
+      ),
+    ];
+  }, [
+    serverMessages,
+    attachmentPreviewHandoffByMessageId,
+    optimisticUserMessages,
+    pendingPiPromptMessages,
+  ]);
   const timelineEntries = useMemo(
     () =>
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
@@ -2039,20 +2116,6 @@ export default function ChatView(props: ChatViewProps) {
   }, [activeThread?.id, focusComposer, terminalState.terminalOpen]);
 
   useEffect(() => {
-    setQueuedPiFollowUpMessageIds((existing) => (existing.size === 0 ? existing : new Set()));
-  }, [threadId]);
-
-  useEffect(() => {
-    if (queuedPiFollowUpMessageIds.size === 0) {
-      return;
-    }
-    if (isWorking) {
-      return;
-    }
-    setQueuedPiFollowUpMessageIds((existing) => (existing.size === 0 ? existing : new Set()));
-  }, [isWorking, queuedPiFollowUpMessageIds]);
-
-  useEffect(() => {
     if (!activeThread?.id) return;
     if (activeThread.messages.length === 0) {
       return;
@@ -2692,6 +2755,52 @@ export default function ChatView(props: ChatViewProps) {
       createdAt: new Date().toISOString(),
     });
   };
+
+  const onEditQueuedUserMessage = useCallback(
+    async (messageId: MessageId) => {
+      if (!isPiRuntimeThread || !activeThreadId) {
+        return;
+      }
+      const api = readEnvironmentApi(environmentId);
+      const queuedPrompt = piRuntimeQuery.data?.state.queuedPrompts.find(
+        (entry) => entry.messageId === messageId,
+      );
+      if (!api || !queuedPrompt) {
+        return;
+      }
+      const nextMessage = window.prompt("Edit queued message", queuedPrompt.message);
+      if (nextMessage === null) {
+        return;
+      }
+      const trimmedMessage = nextMessage.trim();
+      if (trimmedMessage.length === 0) {
+        await api.provider.cancelPiQueuedPrompt({ threadId: activeThreadId, messageId });
+      } else {
+        await api.provider.updatePiQueuedPrompt({
+          threadId: activeThreadId,
+          messageId,
+          message: trimmedMessage,
+        });
+      }
+      void piRuntimeQuery.refetch();
+    },
+    [activeThreadId, environmentId, isPiRuntimeThread, piRuntimeQuery],
+  );
+
+  const onCancelQueuedUserMessage = useCallback(
+    async (messageId: MessageId) => {
+      if (!isPiRuntimeThread || !activeThreadId) {
+        return;
+      }
+      const api = readEnvironmentApi(environmentId);
+      if (!api) {
+        return;
+      }
+      await api.provider.cancelPiQueuedPrompt({ threadId: activeThreadId, messageId });
+      void piRuntimeQuery.refetch();
+    },
+    [activeThreadId, environmentId, isPiRuntimeThread, piRuntimeQuery],
+  );
 
   const onRespondToApproval = useCallback(
     async (requestId: ApprovalRequestId, decision: ProviderApprovalDecision) => {
@@ -3454,8 +3563,11 @@ export default function ChatView(props: ChatViewProps) {
               routeThreadKey={routeThreadKey}
               onOpenTurnDiff={onOpenTurnDiff}
               revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
-              queuedUserMessageIds={queuedPiFollowUpMessageIds}
+              queuedUserMessageIds={queuedUserMessageIds}
+              steeringUserMessageIds={steeringUserMessageIds}
               onRevertUserMessage={onRevertUserMessage}
+              onEditQueuedUserMessage={onEditQueuedUserMessage}
+              onCancelQueuedUserMessage={onCancelQueuedUserMessage}
               isRevertingCheckpoint={isRevertingCheckpoint}
               onImageExpand={onExpandTimelineImage}
               markdownCwd={gitCwd ?? undefined}
@@ -3531,21 +3643,7 @@ export default function ChatView(props: ChatViewProps) {
               scheduleStickToBottom={scrollToEnd}
               onSend={onSend}
               onInterrupt={onInterrupt}
-              onQueuedPiFollowUpChange={(messageId, queued) => {
-                setQueuedPiFollowUpMessageIds((existing) => {
-                  const hasMessage = existing.has(messageId);
-                  if (queued === hasMessage) {
-                    return existing;
-                  }
-                  const next = new Set(existing);
-                  if (queued) {
-                    next.add(messageId);
-                  } else {
-                    next.delete(messageId);
-                  }
-                  return next;
-                });
-              }}
+              onQueuedPiFollowUpChange={() => undefined}
               onImplementPlanInNewThread={onImplementPlanInNewThread}
               onRespondToApproval={onRespondToApproval}
               onSelectActivePendingUserInputOption={onSelectActivePendingUserInputOption}

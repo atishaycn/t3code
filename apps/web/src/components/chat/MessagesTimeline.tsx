@@ -20,6 +20,7 @@ import {
   CheckIcon,
   CircleAlertIcon,
   Clock3Icon,
+  SendIcon,
   EyeIcon,
   GlobeIcon,
   HammerIcon,
@@ -82,6 +83,8 @@ interface TimelineRowSharedState {
   workspaceRoot: string | undefined;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertUserMessage: (messageId: MessageId) => void;
+  onEditQueuedUserMessage: (messageId: MessageId) => void;
+  onCancelQueuedUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }
@@ -106,7 +109,10 @@ interface MessagesTimelineProps {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   queuedUserMessageIds: ReadonlySet<MessageId>;
+  steeringUserMessageIds: ReadonlySet<MessageId>;
   onRevertUserMessage: (messageId: MessageId) => void;
+  onEditQueuedUserMessage: (messageId: MessageId) => void;
+  onCancelQueuedUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
@@ -136,7 +142,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onOpenTurnDiff,
   revertTurnCountByUserMessageId,
   queuedUserMessageIds,
+  steeringUserMessageIds,
   onRevertUserMessage,
+  onEditQueuedUserMessage,
+  onCancelQueuedUserMessage,
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
@@ -157,6 +166,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
         queuedUserMessageIds,
+        steeringUserMessageIds,
       }),
     [
       timelineEntries,
@@ -166,6 +176,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
       queuedUserMessageIds,
+      steeringUserMessageIds,
     ],
   );
   const rows = useStableRows(rawRows);
@@ -211,6 +222,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       activeThreadEnvironmentId,
       onRevertUserMessage,
+      onEditQueuedUserMessage,
+      onCancelQueuedUserMessage,
       onImageExpand,
       onOpenTurnDiff,
     }),
@@ -227,6 +240,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       activeThreadEnvironmentId,
       onRevertUserMessage,
+      onEditQueuedUserMessage,
+      onCancelQueuedUserMessage,
       onImageExpand,
       onOpenTurnDiff,
     ],
@@ -317,7 +332,9 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                   "group relative max-w-[80%] rounded-2xl rounded-br-sm border px-4 py-3",
                   row.isQueued
                     ? "border-dashed border-amber-500/40 bg-amber-500/6"
-                    : "border-border bg-secondary",
+                    : row.isSteering
+                      ? "border-dashed border-blue-500/40 bg-blue-500/6"
+                      : "border-border bg-secondary",
                 )}
               >
                 {userImages.length > 0 && (
@@ -368,17 +385,49 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                       <Clock3Icon className="size-3" />
                       Queued
                     </span>
+                  ) : row.isSteering ? (
+                    <span className="mr-auto inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
+                      <SendIcon className="size-3" />
+                      Steering active turn
+                    </span>
                   ) : null}
                   <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
                     {displayedUserMessage.copyText && (
                       <MessageCopyButton text={displayedUserMessage.copyText} />
                     )}
+                    {row.isQueued ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => ctx.onEditQueuedUserMessage(row.message.id)}
+                          title="Edit queued message"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => ctx.onCancelQueuedUserMessage(row.message.id)}
+                          title="Cancel queued message"
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : null}
                     {canRevertAgentWork && (
                       <Button
                         type="button"
                         size="xs"
                         variant="outline"
-                        disabled={row.isQueued || ctx.isRevertingCheckpoint || ctx.isWorking}
+                        disabled={
+                          row.isQueued ||
+                          row.isSteering ||
+                          ctx.isRevertingCheckpoint ||
+                          ctx.isWorking
+                        }
                         onClick={() => ctx.onRevertUserMessage(row.message.id)}
                         title="Revert to this message"
                       >
@@ -389,7 +438,9 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                   <p className="text-right text-xs text-muted-foreground/50">
                     {row.isQueued
                       ? `${formatTimestamp(row.message.createdAt, ctx.timestampFormat)} • queued`
-                      : formatTimestamp(row.message.createdAt, ctx.timestampFormat)}
+                      : row.isSteering
+                        ? `${formatTimestamp(row.message.createdAt, ctx.timestampFormat)} • steering`
+                        : formatTimestamp(row.message.createdAt, ctx.timestampFormat)}
                   </p>
                 </div>
               </div>

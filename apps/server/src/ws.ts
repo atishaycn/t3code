@@ -45,8 +45,11 @@ import {
   observeRpcStreamEffect,
 } from "./observability/RpcInstrumentation";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry";
-import { getPiSessionRuntimeController } from "./provider/Layers/PiAdapter";
-import type { PiRpcSessionState, PiRpcSessionStats } from "./provider/pi/PiRpc";
+import {
+  getPiSessionRuntimeController,
+  type PiSessionRuntimeSnapshot,
+} from "./provider/Layers/PiAdapter";
+import type { PiRpcSessionStats } from "./provider/pi/PiRpc";
 import { ServerLifecycleEvents } from "./serverLifecycleEvents";
 import { ServerRuntimeStartup } from "./serverRuntimeStartup";
 import { ServerSettingsService } from "./serverSettings";
@@ -93,7 +96,7 @@ function isThreadDetailEvent(event: OrchestrationEvent): event is Extract<
 
 const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 
-function toServerPiThreadRuntimeState(state: PiRpcSessionState) {
+function toServerPiThreadRuntimeState(state: PiSessionRuntimeSnapshot) {
   return {
     model: state.model ?? null,
     thinkingLevel: state.thinkingLevel,
@@ -107,6 +110,8 @@ function toServerPiThreadRuntimeState(state: PiRpcSessionState) {
     autoCompactionEnabled: state.autoCompactionEnabled,
     messageCount: state.messageCount,
     pendingMessageCount: state.pendingMessageCount,
+    queuedPrompts: state.queuedPrompts,
+    steeringPrompts: state.steeringPrompts,
   };
 }
 
@@ -878,33 +883,6 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                 });
               }
 
-              yield* orchestrationEngine
-                .dispatch({
-                  type: "thread.message.create",
-                  commandId: serverCommandId(
-                    input.streamingBehavior === "steer"
-                      ? "pi-steer-message"
-                      : "pi-followup-message",
-                  ),
-                  threadId: input.threadId,
-                  message: {
-                    messageId: input.messageId,
-                    role: "user",
-                    text: input.message,
-                    attachments: [],
-                  },
-                  createdAt: input.createdAt,
-                })
-                .pipe(
-                  Effect.mapError(
-                    (cause) =>
-                      new ServerPiThreadRuntimeError({
-                        message: "Failed to persist Pi follow-up message.",
-                        cause,
-                      }),
-                  ),
-                );
-
               yield* Effect.tryPromise({
                 try: () => controller.sendPrompt(input),
                 catch: (cause) =>
@@ -942,6 +920,54 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               );
 
               return {};
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverUpdatePiQueuedPrompt]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverUpdatePiQueuedPrompt,
+            Effect.gen(function* () {
+              const controller = getPiSessionRuntimeController();
+              if (!controller) {
+                return yield* new ServerPiThreadRuntimeError({
+                  message: "Pi runtime controller is unavailable.",
+                });
+              }
+
+              const state = yield* Effect.tryPromise({
+                try: () => controller.updateQueuedPrompt(input),
+                catch: (cause) =>
+                  new ServerPiThreadRuntimeError({
+                    message: "Failed to update queued Pi follow-up.",
+                    cause,
+                  }),
+              });
+
+              return { state: toServerPiThreadRuntimeState(state) };
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverCancelPiQueuedPrompt]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverCancelPiQueuedPrompt,
+            Effect.gen(function* () {
+              const controller = getPiSessionRuntimeController();
+              if (!controller) {
+                return yield* new ServerPiThreadRuntimeError({
+                  message: "Pi runtime controller is unavailable.",
+                });
+              }
+
+              const state = yield* Effect.tryPromise({
+                try: () => controller.cancelQueuedPrompt(input),
+                catch: (cause) =>
+                  new ServerPiThreadRuntimeError({
+                    message: "Failed to cancel queued Pi follow-up.",
+                    cause,
+                  }),
+              });
+
+              return { state: toServerPiThreadRuntimeState(state) };
             }),
             { "rpc.aggregate": "server" },
           ),

@@ -5,6 +5,7 @@ import * as Path from "node:path";
 import {
   type ChatAttachment,
   EventId,
+  type MessageId,
   type ModelSelection,
   type ProviderRuntimeEvent,
   type ProviderSession,
@@ -119,12 +120,26 @@ async function shouldFinalizePendingTurnCompletion(session: PiAdapterSession): P
     state.pendingMessageCount <= 0 &&
     session.latestQueueState.steeringCount <= 0 &&
     session.latestQueueState.followUpCount <= 0 &&
-    session.toolStates.size === 0
+    session.toolStates.size === 0 &&
+    session.activeSteeringPrompts.length === 0
   );
 }
 
+export interface PiSessionRuntimeSnapshot extends PiRpcSessionState {
+  readonly queuedPrompts: ReadonlyArray<{
+    readonly messageId: MessageId;
+    readonly message: string;
+    readonly createdAt: string;
+  }>;
+  readonly steeringPrompts: ReadonlyArray<{
+    readonly messageId: MessageId;
+    readonly message: string;
+    readonly createdAt: string;
+  }>;
+}
+
 export interface PiSessionRuntimeController {
-  getRuntimeState(threadId: ThreadId): Promise<PiRpcSessionState>;
+  getRuntimeState(threadId: ThreadId): Promise<PiSessionRuntimeSnapshot>;
   getSessionStats(threadId: ThreadId): Promise<PiRpcSessionStats>;
   updateRuntimeSettings(input: {
     readonly threadId: ThreadId;
@@ -132,22 +147,39 @@ export interface PiSessionRuntimeController {
     readonly followUpMode?: "all" | "one-at-a-time";
     readonly autoCompactionEnabled?: boolean;
     readonly sessionName?: string | null;
-  }): Promise<PiRpcSessionState>;
+  }): Promise<PiSessionRuntimeSnapshot>;
   compact(
     threadId: ThreadId,
     customInstructions?: string,
   ): Promise<{ summary?: string } | undefined>;
   sendPrompt(input: {
     readonly threadId: ThreadId;
+    readonly messageId: MessageId;
     readonly message: string;
+    readonly createdAt: string;
     readonly streamingBehavior: "steer" | "followUp";
   }): Promise<void>;
+  updateQueuedPrompt(input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+    readonly message: string;
+  }): Promise<PiSessionRuntimeSnapshot>;
+  cancelQueuedPrompt(input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+  }): Promise<PiSessionRuntimeSnapshot>;
 }
 
 let activePiSessionRuntimeController: PiSessionRuntimeController | null = null;
 
 export function getPiSessionRuntimeController(): PiSessionRuntimeController | null {
   return activePiSessionRuntimeController;
+}
+
+interface PendingPiPrompt {
+  readonly messageId: MessageId;
+  message: string;
+  readonly createdAt: string;
 }
 
 interface PiAdapterSession {
@@ -166,6 +198,9 @@ interface PiAdapterSession {
     steeringCount: number;
     followUpCount: number;
   };
+  queuedFollowUps: PendingPiPrompt[];
+  activeSteeringPrompts: PendingPiPrompt[];
+  drainingQueuedFollowUp: boolean;
   closing: boolean;
   toolStates: Map<string, ToolLifecycleState>;
   assistantTextByItemId: Map<string, string>;
@@ -368,7 +403,7 @@ export const PiAdapterLive = Layer.effect(
         if (!session) {
           throw new ProviderAdapterSessionNotFoundError({ provider: PROVIDER, threadId });
         }
-        return session.process.getState();
+        return snapshotRuntimeState(session);
       },
       getSessionStats: async (threadId) => {
         const session = sessions.get(threadId);
@@ -401,7 +436,7 @@ export const PiAdapterLive = Layer.effect(
         session.model = providerModelLabel(state, session.model);
         session.thinkingLevel =
           (state.thinkingLevel as PiThinkingLevel | undefined) ?? session.thinkingLevel;
-        return state;
+        return snapshotRuntimeState(session);
       },
       compact: async (threadId, customInstructions) => {
         const session = sessions.get(threadId);
@@ -418,11 +453,77 @@ export const PiAdapterLive = Layer.effect(
             threadId: input.threadId,
           });
         }
-        await session.process.prompt({
+        if (input.streamingBehavior === "followUp") {
+          session.queuedFollowUps.push({
+            messageId: input.messageId,
+            message: input.message,
+            createdAt: input.createdAt,
+          });
+          session.updatedAt = new Date().toISOString();
+          await maybeDrainQueuedFollowUps(session);
+          return;
+        }
+
+        const steeringPrompt = {
+          messageId: input.messageId,
           message: input.message,
-          streamingBehavior: input.streamingBehavior,
-        });
+          createdAt: input.createdAt,
+        };
+        session.activeSteeringPrompts.push(steeringPrompt);
+        try {
+          await session.process.prompt({
+            message: input.message,
+            streamingBehavior: input.streamingBehavior,
+          });
+          session.updatedAt = new Date().toISOString();
+        } catch (error) {
+          session.activeSteeringPrompts = session.activeSteeringPrompts.filter(
+            (entry) => entry.messageId !== input.messageId,
+          );
+          throw error;
+        }
+      },
+      updateQueuedPrompt: async (input) => {
+        const session = sessions.get(input.threadId);
+        if (!session) {
+          throw new ProviderAdapterSessionNotFoundError({
+            provider: PROVIDER,
+            threadId: input.threadId,
+          });
+        }
+        const prompt = session.queuedFollowUps.find((entry) => entry.messageId === input.messageId);
+        if (!prompt) {
+          throw new ProviderAdapterRequestError({
+            provider: PROVIDER,
+            method: "updateQueuedPrompt",
+            detail: `Queued Pi follow-up '${input.messageId}' was not found.`,
+          });
+        }
+        prompt.message = input.message;
         session.updatedAt = new Date().toISOString();
+        return snapshotRuntimeState(session);
+      },
+      cancelQueuedPrompt: async (input) => {
+        const session = sessions.get(input.threadId);
+        if (!session) {
+          throw new ProviderAdapterSessionNotFoundError({
+            provider: PROVIDER,
+            threadId: input.threadId,
+          });
+        }
+        const nextQueue = session.queuedFollowUps.filter(
+          (entry) => entry.messageId !== input.messageId,
+        );
+        if (nextQueue.length === session.queuedFollowUps.length) {
+          throw new ProviderAdapterRequestError({
+            provider: PROVIDER,
+            method: "cancelQueuedPrompt",
+            detail: `Queued Pi follow-up '${input.messageId}' was not found.`,
+          });
+        }
+        session.queuedFollowUps = nextQueue;
+        session.updatedAt = new Date().toISOString();
+        return snapshotRuntimeState(session);
       },
     };
 
@@ -442,6 +543,69 @@ export const PiAdapterLive = Layer.effect(
         createdAt: session.updatedAt,
         ...input,
       } as ProviderRuntimeEvent;
+    };
+
+    const snapshotRuntimeState = async (
+      session: PiAdapterSession,
+    ): Promise<PiSessionRuntimeSnapshot> => {
+      const state = await session.process.getState();
+      return {
+        ...state,
+        pendingMessageCount: state.pendingMessageCount + session.queuedFollowUps.length,
+        queuedPrompts: session.queuedFollowUps.map((prompt) => ({
+          messageId: prompt.messageId,
+          message: prompt.message,
+          createdAt: prompt.createdAt,
+        })),
+        steeringPrompts: session.activeSteeringPrompts.map((prompt) => ({
+          messageId: prompt.messageId,
+          message: prompt.message,
+          createdAt: prompt.createdAt,
+        })),
+      };
+    };
+
+    const maybeDrainQueuedFollowUps = async (session: PiAdapterSession): Promise<void> => {
+      if (
+        session.drainingQueuedFollowUp ||
+        session.queuedFollowUps.length === 0 ||
+        session.closing
+      ) {
+        return;
+      }
+      const state = await session.process.getState();
+      const canSend =
+        state.isStreaming === false &&
+        state.pendingMessageCount <= 0 &&
+        session.latestQueueState.steeringCount <= 0 &&
+        session.latestQueueState.followUpCount <= 0 &&
+        session.toolStates.size === 0 &&
+        session.activeTurn === null &&
+        session.activeSteeringPrompts.length === 0;
+      if (!canSend) {
+        return;
+      }
+
+      const nextPrompt = session.queuedFollowUps[0];
+      if (!nextPrompt) {
+        return;
+      }
+
+      session.drainingQueuedFollowUp = true;
+      try {
+        await session.process.prompt({
+          message: nextPrompt.message,
+          streamingBehavior: "followUp",
+        });
+        session.queuedFollowUps.shift();
+        session.updatedAt = new Date().toISOString();
+      } finally {
+        session.drainingQueuedFollowUp = false;
+      }
+
+      if (session.queuedFollowUps.length > 0) {
+        await maybeDrainQueuedFollowUps(session);
+      }
     };
 
     const sessionPathForThread = (threadId: ThreadId): string =>
@@ -544,9 +708,11 @@ export const PiAdapterLive = Layer.effect(
         }),
       );
       session.activeTurn = null;
+      session.activeSteeringPrompts = [];
       session.toolStates.clear();
       session.assistantTextByItemId.clear();
       session.reasoningTextByItemId.clear();
+      await maybeDrainQueuedFollowUps(session);
     };
 
     const schedulePendingTurnCompletion = (
@@ -1125,6 +1291,7 @@ export const PiAdapterLive = Layer.effect(
             steeringCount: event.steering.length,
             followUpCount: event.followUp.length,
           };
+          await maybeDrainQueuedFollowUps(session);
           return;
       }
     };
@@ -1229,6 +1396,9 @@ export const PiAdapterLive = Layer.effect(
           steeringCount: 0,
           followUpCount: 0,
         },
+        queuedFollowUps: [],
+        activeSteeringPrompts: [],
+        drainingQueuedFollowUp: false,
         closing: false,
         toolStates: new Map(),
         assistantTextByItemId: new Map(),

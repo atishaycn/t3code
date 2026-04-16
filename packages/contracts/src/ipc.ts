@@ -32,6 +32,10 @@ import type {
   ServerConfig,
   ServerSendPiThreadPromptInput,
   ServerSendPiThreadPromptResult,
+  ServerUpdatePiQueuedPromptInput,
+  ServerUpdatePiQueuedPromptResult,
+  ServerCancelPiQueuedPromptInput,
+  ServerCancelPiQueuedPromptResult,
   ServerGetPiThreadRuntimeInput,
   ServerGetPiThreadRuntimeResult,
   ServerProviderUpdatedPayload,
@@ -309,5 +313,11 @@ export interface EnvironmentApi {
     sendPiThreadPrompt: (
       input: ServerSendPiThreadPromptInput,
     ) => Promise<ServerSendPiThreadPromptResult>;
+    updatePiQueuedPrompt: (
+      input: ServerUpdatePiQueuedPromptInput,
+    ) => Promise<ServerUpdatePiQueuedPromptResult>;
+    cancelPiQueuedPrompt: (
+      input: ServerCancelPiQueuedPromptInput,
+    ) => Promise<ServerCancelPiQueuedPromptResult>;
   };
 }

@@ -131,6 +131,13 @@ export const ServerPiRuntimeModel = Schema.Struct({
 });
 export type ServerPiRuntimeModel = typeof ServerPiRuntimeModel.Type;
 
+export const ServerPiPendingPrompt = Schema.Struct({
+  messageId: MessageId,
+  message: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+export type ServerPiPendingPrompt = typeof ServerPiPendingPrompt.Type;
+
 export const ServerPiThreadRuntimeState = Schema.Struct({
   model: Schema.NullOr(ServerPiRuntimeModel),
   thinkingLevel: TrimmedNonEmptyString,
@@ -144,6 +151,8 @@ export const ServerPiThreadRuntimeState = Schema.Struct({
   autoCompactionEnabled: Schema.Boolean,
   messageCount: NonNegativeInt,
   pendingMessageCount: NonNegativeInt,
+  queuedPrompts: Schema.Array(ServerPiPendingPrompt),
+  steeringPrompts: Schema.Array(ServerPiPendingPrompt),
 });
 export type ServerPiThreadRuntimeState = typeof ServerPiThreadRuntimeState.Type;
 
@@ -220,6 +229,29 @@ export type ServerSendPiThreadPromptInput = typeof ServerSendPiThreadPromptInput
 
 export const ServerSendPiThreadPromptResult = Schema.Struct({});
 export type ServerSendPiThreadPromptResult = typeof ServerSendPiThreadPromptResult.Type;
+
+export const ServerUpdatePiQueuedPromptInput = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+  message: TrimmedNonEmptyString,
+});
+export type ServerUpdatePiQueuedPromptInput = typeof ServerUpdatePiQueuedPromptInput.Type;
+
+export const ServerUpdatePiQueuedPromptResult = Schema.Struct({
+  state: ServerPiThreadRuntimeState,
+});
+export type ServerUpdatePiQueuedPromptResult = typeof ServerUpdatePiQueuedPromptResult.Type;
+
+export const ServerCancelPiQueuedPromptInput = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+});
+export type ServerCancelPiQueuedPromptInput = typeof ServerCancelPiQueuedPromptInput.Type;
+
+export const ServerCancelPiQueuedPromptResult = Schema.Struct({
+  state: ServerPiThreadRuntimeState,
+});
+export type ServerCancelPiQueuedPromptResult = typeof ServerCancelPiQueuedPromptResult.Type;
 
 export class ServerPiThreadRuntimeError extends Schema.TaggedErrorClass<ServerPiThreadRuntimeError>()(
   "ServerPiThreadRuntimeError",
