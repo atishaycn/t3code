@@ -17,9 +17,9 @@ const makeServerSettingsLayer = () =>
   );
 
 it.layer(NodeServices.layer)("server settings", (it) => {
-  it.effect("defaults Pi to the embedded-autonomy posture", () =>
+  it.effect("defaults Pi to the embedded-autonomy posture without autoreason launcher flags", () =>
     Effect.sync(() => {
-      assert.equal(DEFAULT_SERVER_SETTINGS.providers.pi.enableAutoreason, true);
+      assert.equal(DEFAULT_SERVER_SETTINGS.providers.pi.enableAutoreason, false);
       assert.equal(DEFAULT_SERVER_SETTINGS.providers.pi.fullAutonomy, true);
       assert.equal(DEFAULT_SERVER_SETTINGS.providers.pi.inheritExtensions, true);
       assert.deepEqual(DEFAULT_SERVER_SETTINGS.textGenerationModelSelection, {

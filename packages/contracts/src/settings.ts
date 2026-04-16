@@ -70,7 +70,7 @@ export const PiSettings = Schema.Struct({
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   binaryPath: makeBinaryPathSetting("pi"),
   homePath: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  enableAutoreason: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  enableAutoreason: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   fullAutonomy: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   inheritExtensions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
