@@ -1,5 +1,15 @@
 import { Schema, SchemaIssue } from "effect";
 
+const describeCause = (cause: unknown): string | undefined => {
+  if (cause instanceof Error && cause.message.length > 0) {
+    return cause.message;
+  }
+  if (typeof cause === "string" && cause.length > 0) {
+    return cause;
+  }
+  return undefined;
+};
+
 // ===============================
 // Core Persistence Errors
 // ===============================
@@ -34,7 +44,12 @@ export function toPersistenceSqlError(operation: string) {
   return (cause: unknown): PersistenceSqlError =>
     new PersistenceSqlError({
       operation,
-      detail: `Failed to execute ${operation}`,
+      detail: (() => {
+        const causeDetail = describeCause(cause);
+        return causeDetail === undefined
+          ? `Failed to execute ${operation}`
+          : `Failed to execute ${operation}: ${causeDetail}`;
+      })(),
       cause,
     });
 }
