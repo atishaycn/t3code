@@ -9,6 +9,7 @@ import type {
   RuntimeMode,
   ScopedThreadRef,
   ServerProvider,
+  MessageId,
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
@@ -437,6 +438,7 @@ export interface ChatComposerProps {
   // Callbacks
   onSend: (e?: { preventDefault: () => void }) => void;
   onInterrupt: () => void;
+  onQueuedPiFollowUpChange: (messageId: MessageId, queued: boolean) => void;
   onImplementPlanInNewThread: () => void;
   onRespondToApproval: (
     requestId: ApprovalRequestId,
@@ -1738,10 +1740,15 @@ export const ChatComposer = memo(
         if (trimmedPrompt.length === 0) {
           return;
         }
+        let messageId: MessageId | null = null;
         try {
+          messageId = randomUUID() as MessageId;
+          if (streamingBehavior === "followUp") {
+            props.onQueuedPiFollowUpChange(messageId, true);
+          }
           await ensureEnvironmentApi(environmentId).provider.sendPiThreadPrompt({
             threadId: activeThreadId,
-            messageId: randomUUID() as never,
+            messageId,
             message: trimmedPrompt,
             streamingBehavior,
             createdAt: new Date().toISOString(),
@@ -1761,6 +1768,9 @@ export const ChatComposer = memo(
           });
           void queryClient.invalidateQueries({ queryKey: piRuntimeQueryKey });
         } catch (error) {
+          if (streamingBehavior === "followUp" && messageId) {
+            props.onQueuedPiFollowUpChange(messageId, false);
+          }
           toastManager.add({
             type: "error",
             title:
@@ -1781,6 +1791,7 @@ export const ChatComposer = memo(
         isPiRuntimeThread,
         piRuntimeQueryKey,
         prompt,
+        props.onQueuedPiFollowUpChange,
         queryClient,
         scheduleComposerFocus,
         setComposerDraftPrompt,

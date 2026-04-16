@@ -328,6 +328,39 @@ describe("deriveMessagesTimelineRows", () => {
     expect(userRow?.revertTurnCount).toBe(1);
     expect(assistantRow?.assistantTurnDiffSummary).toBe(assistantTurnDiffSummary);
   });
+
+  it("marks queued user messages so the UI can keep them out of the sent state", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "user-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:00Z",
+          message: {
+            id: "user-queued" as never,
+            role: "user",
+            text: "Commit changes",
+            turnId: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            streaming: false,
+          },
+        },
+      ],
+      completionDividerBeforeEntryId: null,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+      queuedUserMessageIds: new Set(["user-queued" as never]),
+    });
+
+    const userRow = rows.find(
+      (row): row is Extract<(typeof rows)[number], { kind: "message" }> =>
+        row.kind === "message" && row.message.role === "user",
+    );
+
+    expect(userRow?.isQueued).toBe(true);
+  });
 });
 
 describe("computeStableMessagesTimelineRows", () => {

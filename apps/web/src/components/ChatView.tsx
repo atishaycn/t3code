@@ -670,6 +670,9 @@ export default function ChatView(props: ChatViewProps) {
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
   optimisticUserMessagesRef.current = optimisticUserMessages;
+  const [queuedPiFollowUpMessageIds, setQueuedPiFollowUpMessageIds] = useState<Set<MessageId>>(
+    () => new Set(),
+  );
   const pendingOptimisticUserMessagesByThreadIdRef = useRef<Record<string, ChatMessage[]>>({});
   const [localDraftErrorsByDraftId, setLocalDraftErrorsByDraftId] = useState<
     Record<string, string | null>
@@ -2034,6 +2037,20 @@ export default function ChatView(props: ChatViewProps) {
       window.cancelAnimationFrame(frame);
     };
   }, [activeThread?.id, focusComposer, terminalState.terminalOpen]);
+
+  useEffect(() => {
+    setQueuedPiFollowUpMessageIds((existing) => (existing.size === 0 ? existing : new Set()));
+  }, [threadId]);
+
+  useEffect(() => {
+    if (queuedPiFollowUpMessageIds.size === 0) {
+      return;
+    }
+    if (isWorking) {
+      return;
+    }
+    setQueuedPiFollowUpMessageIds((existing) => (existing.size === 0 ? existing : new Set()));
+  }, [isWorking, queuedPiFollowUpMessageIds]);
 
   useEffect(() => {
     if (!activeThread?.id) return;
@@ -3437,6 +3454,7 @@ export default function ChatView(props: ChatViewProps) {
               routeThreadKey={routeThreadKey}
               onOpenTurnDiff={onOpenTurnDiff}
               revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
+              queuedUserMessageIds={queuedPiFollowUpMessageIds}
               onRevertUserMessage={onRevertUserMessage}
               isRevertingCheckpoint={isRevertingCheckpoint}
               onImageExpand={onExpandTimelineImage}
@@ -3513,6 +3531,21 @@ export default function ChatView(props: ChatViewProps) {
               scheduleStickToBottom={scrollToEnd}
               onSend={onSend}
               onInterrupt={onInterrupt}
+              onQueuedPiFollowUpChange={(messageId, queued) => {
+                setQueuedPiFollowUpMessageIds((existing) => {
+                  const hasMessage = existing.has(messageId);
+                  if (queued === hasMessage) {
+                    return existing;
+                  }
+                  const next = new Set(existing);
+                  if (queued) {
+                    next.add(messageId);
+                  } else {
+                    next.delete(messageId);
+                  }
+                  return next;
+                });
+              }}
               onImplementPlanInNewThread={onImplementPlanInNewThread}
               onRespondToApproval={onRespondToApproval}
               onSelectActivePendingUserInputOption={onSelectActivePendingUserInputOption}

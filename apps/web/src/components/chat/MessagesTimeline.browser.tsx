@@ -1,6 +1,6 @@
 import "../../index.css";
 
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, type MessageId } from "@t3tools/contracts";
 import { createRef } from "react";
 import type { LegendListRef } from "@legendapp/list/react";
 import { page } from "vitest/browser";
@@ -61,6 +61,7 @@ function buildProps() {
     routeThreadKey: "environment-local:thread-1",
     onOpenTurnDiff: vi.fn(),
     revertTurnCountByUserMessageId: new Map(),
+    queuedUserMessageIds: new Set<MessageId>(),
     onRevertUserMessage: vi.fn(),
     isRevertingCheckpoint: false,
     onImageExpand: vi.fn(),
