@@ -158,6 +158,7 @@ import {
   createLocalDispatchSnapshot,
   deriveComposerSendState,
   hasServerAcknowledgedLocalDispatch,
+  isPiRuntimeBusy,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
@@ -167,6 +168,7 @@ import {
   pinPendingMessagesToBottom,
   readFileAsDataUrl,
   reconcileMountedTerminalThreadIds,
+  reconcileVisiblePendingPiPromptMessages,
   resolveSendEnvMode,
   revokeBlobPreviewUrl,
   revokeUserMessagePreviewUrls,
@@ -808,16 +810,7 @@ export default function ChatView(props: ChatViewProps) {
       ensureEnvironmentApi(environmentId).provider.getPiThreadRuntime({
         threadId: activeThreadId!,
       }),
-    refetchInterval: (query) => {
-      const state = query.state.data?.state;
-      if (!state) return false;
-      return state.isStreaming ||
-        state.pendingMessageCount > 0 ||
-        state.queuedPrompts.length > 0 ||
-        state.steeringPrompts.length > 0
-        ? 1000
-        : false;
-    },
+    refetchInterval: (query) => (isPiRuntimeBusy(query.state.data?.state ?? null) ? 1000 : false),
   });
   const activeThreadRef = useMemo(
     () => (activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null),
@@ -1163,7 +1156,13 @@ export default function ChatView(props: ChatViewProps) {
     activePendingUserInput: activePendingUserInput?.requestId ?? null,
     threadError: activeThread?.error,
   });
-  const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const piRuntimeBusy = isPiRuntimeBusy(piRuntimeQuery.data?.state ?? null);
+  const isWorking =
+    phase === "running" ||
+    isSendBusy ||
+    isConnecting ||
+    isRevertingCheckpoint ||
+    (isPiRuntimeThread && piRuntimeBusy);
   const forkChatDisabledReason = !isServerThread
     ? "Forking is unavailable until this draft thread is created."
     : !threadHasStarted(activeThread)
@@ -1344,23 +1343,37 @@ export default function ChatView(props: ChatViewProps) {
       })),
     ];
   }, [piRuntimeQuery.data?.state]);
+  const [visiblePendingPiPromptMessages, setVisiblePendingPiPromptMessages] =
+    useState(pendingPiPromptMessages);
+  useEffect(() => {
+    setVisiblePendingPiPromptMessages([]);
+  }, [activeThreadId]);
+  useEffect(() => {
+    setVisiblePendingPiPromptMessages((previousVisibleMessages) =>
+      reconcileVisiblePendingPiPromptMessages({
+        runtimeState: piRuntimeQuery.data?.state ?? null,
+        runtimePendingMessages: pendingPiPromptMessages,
+        previousVisibleMessages,
+      }),
+    );
+  }, [activeThreadId, pendingPiPromptMessages, piRuntimeQuery.data?.state]);
   const queuedUserMessageIds = useMemo(
     () =>
       new Set(
-        pendingPiPromptMessages
+        visiblePendingPiPromptMessages
           .filter((message) => message.pendingKind === "queued")
           .map((message) => message.id),
       ),
-    [pendingPiPromptMessages],
+    [visiblePendingPiPromptMessages],
   );
   const steeringUserMessageIds = useMemo(
     () =>
       new Set(
-        pendingPiPromptMessages
+        visiblePendingPiPromptMessages
           .filter((message) => message.pendingKind === "steering")
           .map((message) => message.id),
       ),
-    [pendingPiPromptMessages],
+    [visiblePendingPiPromptMessages],
   );
 
   const timelineMessages = useMemo(() => {
@@ -1409,7 +1422,7 @@ export default function ChatView(props: ChatViewProps) {
     const serverIds = new Set(serverMessagesWithPreviewHandoff.map((message) => message.id));
     const pendingRuntimeMessages = pinPendingMessagesToBottom(
       serverMessagesWithPreviewHandoff,
-      pendingPiPromptMessages.filter((message) => !serverIds.has(message.id)),
+      visiblePendingPiPromptMessages.filter((message) => !serverIds.has(message.id)),
     );
     const pendingOptimisticMessages = optimisticUserMessages.filter(
       (message) => !serverIds.has(message.id),
@@ -1429,7 +1442,7 @@ export default function ChatView(props: ChatViewProps) {
     serverMessages,
     attachmentPreviewHandoffByMessageId,
     optimisticUserMessages,
-    pendingPiPromptMessages,
+    visiblePendingPiPromptMessages,
   ]);
   const timelineEntries = useMemo(
     () =>

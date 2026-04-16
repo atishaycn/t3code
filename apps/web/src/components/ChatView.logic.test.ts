@@ -12,6 +12,8 @@ import {
   hasServerAcknowledgedLocalDispatch,
   pinPendingMessagesToBottom,
   reconcileMountedTerminalThreadIds,
+  reconcileVisiblePendingPiPromptMessages,
+  isPiRuntimeBusy,
   resolveSendEnvMode,
   shouldWriteThreadErrorToCurrentServerThread,
   waitForStartedServerThread,
@@ -120,6 +122,62 @@ describe("pinPendingMessagesToBottom", () => {
     ]);
     expect(pinned[0]!.createdAt > "2026-03-17T12:00:05.000Z").toBe(true);
     expect(pinned[1]!.createdAt > pinned[0]!.createdAt).toBe(true);
+  });
+});
+
+describe("isPiRuntimeBusy", () => {
+  it("returns true while Pi has queued or in-flight work", () => {
+    expect(
+      isPiRuntimeBusy({
+        isStreaming: false,
+        pendingMessageCount: 1,
+        queuedPrompts: [],
+        steeringPrompts: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false when Pi is idle", () => {
+    expect(
+      isPiRuntimeBusy({
+        isStreaming: false,
+        pendingMessageCount: 0,
+        queuedPrompts: [],
+        steeringPrompts: [],
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("reconcileVisiblePendingPiPromptMessages", () => {
+  it("keeps the last visible queued prompt while Pi is still busy", () => {
+    expect(
+      reconcileVisiblePendingPiPromptMessages({
+        runtimeState: {
+          isStreaming: true,
+          pendingMessageCount: 1,
+          queuedPrompts: [],
+          steeringPrompts: [],
+        },
+        runtimePendingMessages: [],
+        previousVisibleMessages: [{ id: "queued-1" }],
+      }),
+    ).toEqual([{ id: "queued-1" }]);
+  });
+
+  it("clears stale queued prompts once Pi becomes idle", () => {
+    expect(
+      reconcileVisiblePendingPiPromptMessages({
+        runtimeState: {
+          isStreaming: false,
+          pendingMessageCount: 0,
+          queuedPrompts: [],
+          steeringPrompts: [],
+        },
+        runtimePendingMessages: [],
+        previousVisibleMessages: [{ id: "queued-1" }],
+      }),
+    ).toEqual([]);
   });
 });
 

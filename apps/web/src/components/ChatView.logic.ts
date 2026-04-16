@@ -17,6 +17,12 @@ import {
   type TerminalContextDraft,
 } from "../lib/terminalContext";
 import type { DraftThreadEnvMode } from "../composerDraftStore";
+type PiRuntimeBusyState = {
+  isStreaming: boolean;
+  pendingMessageCount: number;
+  queuedPrompts: ReadonlyArray<unknown>;
+  steeringPrompts: ReadonlyArray<unknown>;
+};
 
 export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "t3code:last-invoked-script-by-project";
 export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
@@ -199,6 +205,30 @@ export function pinPendingMessagesToBottom(
     ...message,
     createdAt: new Date(latestBaseTimestamp + index + 1).toISOString(),
   }));
+}
+
+export function isPiRuntimeBusy(state: PiRuntimeBusyState | null): boolean {
+  return Boolean(
+    state &&
+    (state.isStreaming ||
+      state.pendingMessageCount > 0 ||
+      state.queuedPrompts.length > 0 ||
+      state.steeringPrompts.length > 0),
+  );
+}
+
+export function reconcileVisiblePendingPiPromptMessages<TPendingMessage>(input: {
+  runtimeState: PiRuntimeBusyState | null;
+  runtimePendingMessages: ReadonlyArray<TPendingMessage>;
+  previousVisibleMessages: ReadonlyArray<TPendingMessage>;
+}): TPendingMessage[] {
+  if (input.runtimePendingMessages.length > 0) {
+    return [...input.runtimePendingMessages];
+  }
+  if (isPiRuntimeBusy(input.runtimeState)) {
+    return [...input.previousVisibleMessages];
+  }
+  return [];
 }
 
 export function deriveComposerSendState(options: {
