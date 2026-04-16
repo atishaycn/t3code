@@ -19,10 +19,10 @@ import {
   ServerRuntimeStartupError,
 } from "./serverRuntimeStartup.ts";
 
-it("uses the canonical Codex default for auto-bootstrapped model selection", () => {
+it("uses the canonical Pi default for auto-bootstrapped model selection", () => {
   assert.deepStrictEqual(getAutoBootstrapDefaultModelSelection(), {
-    provider: "codex",
-    model: DEFAULT_MODEL_BY_PROVIDER.codex,
+    provider: "pi",
+    model: DEFAULT_MODEL_BY_PROVIDER.pi,
   });
 });
 

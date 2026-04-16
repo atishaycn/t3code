@@ -17,6 +17,18 @@ const makeServerSettingsLayer = () =>
   );
 
 it.layer(NodeServices.layer)("server settings", (it) => {
+  it.effect("defaults Pi to the embedded-autonomy posture", () =>
+    Effect.sync(() => {
+      assert.equal(DEFAULT_SERVER_SETTINGS.providers.pi.enableAutoreason, true);
+      assert.equal(DEFAULT_SERVER_SETTINGS.providers.pi.fullAutonomy, true);
+      assert.equal(DEFAULT_SERVER_SETTINGS.providers.pi.inheritExtensions, true);
+      assert.deepEqual(DEFAULT_SERVER_SETTINGS.textGenerationModelSelection, {
+        provider: "pi",
+        model: "default",
+      });
+    }),
+  );
+
   it.effect("decodes nested settings patches", () =>
     Effect.sync(() => {
       const decodePatch = Schema.decodeUnknownSync(ServerSettingsPatch);

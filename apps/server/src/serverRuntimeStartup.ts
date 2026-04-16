@@ -153,8 +153,8 @@ export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
 );
 
 export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
-  provider: "codex",
-  model: DEFAULT_MODEL_BY_PROVIDER.codex,
+  provider: "pi",
+  model: DEFAULT_MODEL_BY_PROVIDER.pi,
 });
 
 export const resolveWelcomeBase = Effect.gen(function* () {

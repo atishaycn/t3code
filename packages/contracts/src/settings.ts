@@ -70,9 +70,9 @@ export const PiSettings = Schema.Struct({
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   binaryPath: makeBinaryPathSetting("pi"),
   homePath: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  enableAutoreason: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  fullAutonomy: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  inheritExtensions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  enableAutoreason: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  fullAutonomy: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  inheritExtensions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type PiSettings = typeof PiSettings.Type;
@@ -99,8 +99,8 @@ export const ServerSettings = Schema.Struct({
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
-        provider: "codex" as const,
-        model: DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER.codex,
+        provider: "pi" as const,
+        model: DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER.pi,
       }),
     ),
   ),
