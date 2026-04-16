@@ -1,5 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime";
-import { EnvironmentId, ProjectId, ThreadId, TurnId } from "@t3tools/contracts";
+import { EnvironmentId, MessageId, ProjectId, ThreadId, TurnId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type EnvironmentState, useStore } from "../store";
 import { type Thread } from "../types";
@@ -10,6 +10,7 @@ import {
   createLocalDispatchSnapshot,
   deriveComposerSendState,
   hasServerAcknowledgedLocalDispatch,
+  pinPendingMessagesToBottom,
   reconcileMountedTerminalThreadIds,
   resolveSendEnvMode,
   shouldWriteThreadErrorToCurrentServerThread,
@@ -80,6 +81,45 @@ describe("buildExpiredTerminalContextToastCopy", () => {
       title: "Expired terminal contexts omitted from message",
       description: "Re-add it if you want that terminal output included.",
     });
+  });
+});
+
+describe("pinPendingMessagesToBottom", () => {
+  it("pins queued messages after all existing timeline messages", () => {
+    const pinned = pinPendingMessagesToBottom(
+      [
+        {
+          id: MessageId.make("assistant-1"),
+          role: "assistant",
+          text: "Done",
+          createdAt: "2026-03-17T12:00:05.000Z",
+          streaming: false,
+        },
+      ],
+      [
+        {
+          id: MessageId.make("queued-1"),
+          role: "user",
+          text: "follow up",
+          createdAt: "2026-03-17T12:00:02.000Z",
+          streaming: false,
+        },
+        {
+          id: MessageId.make("queued-2"),
+          role: "user",
+          text: "another follow up",
+          createdAt: "2026-03-17T12:00:03.000Z",
+          streaming: false,
+        },
+      ],
+    );
+
+    expect(pinned.map((message) => message.id)).toEqual([
+      MessageId.make("queued-1"),
+      MessageId.make("queued-2"),
+    ]);
+    expect(pinned[0]!.createdAt > "2026-03-17T12:00:05.000Z").toBe(true);
+    expect(pinned[1]!.createdAt > pinned[0]!.createdAt).toBe(true);
   });
 });
 

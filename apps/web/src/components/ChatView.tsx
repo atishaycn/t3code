@@ -164,6 +164,7 @@ import {
   PullRequestDialogState,
   cloneComposerImageForRetry,
   deriveLockedProvider,
+  pinPendingMessagesToBottom,
   readFileAsDataUrl,
   reconcileMountedTerminalThreadIds,
   resolveSendEnvMode,
@@ -1406,8 +1407,9 @@ export default function ChatView(props: ChatViewProps) {
           });
 
     const serverIds = new Set(serverMessagesWithPreviewHandoff.map((message) => message.id));
-    const pendingRuntimeMessages = pendingPiPromptMessages.filter(
-      (message) => !serverIds.has(message.id),
+    const pendingRuntimeMessages = pinPendingMessagesToBottom(
+      serverMessagesWithPreviewHandoff,
+      pendingPiPromptMessages.filter((message) => !serverIds.has(message.id)),
     );
     const pendingOptimisticMessages = optimisticUserMessages.filter(
       (message) => !serverIds.has(message.id),

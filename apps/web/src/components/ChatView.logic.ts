@@ -179,6 +179,28 @@ export function cloneComposerImageForRetry(
   }
 }
 
+export function pinPendingMessagesToBottom(
+  baseMessages: ReadonlyArray<ChatMessage>,
+  pendingMessages: ReadonlyArray<ChatMessage>,
+): ChatMessage[] {
+  if (pendingMessages.length === 0) {
+    return [];
+  }
+
+  const latestBaseTimestamp = Math.max(
+    0,
+    ...baseMessages.map((message) => {
+      const timestamp = Date.parse(message.createdAt);
+      return Number.isNaN(timestamp) ? 0 : timestamp;
+    }),
+  );
+
+  return pendingMessages.map((message, index) => ({
+    ...message,
+    createdAt: new Date(latestBaseTimestamp + index + 1).toISOString(),
+  }));
+}
+
 export function deriveComposerSendState(options: {
   prompt: string;
   imageCount: number;
