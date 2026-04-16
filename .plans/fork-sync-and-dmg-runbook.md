@@ -160,7 +160,31 @@ git push origin HEAD:<target-branch>
 
 ---
 
-## 7. Build the new DMG
+## 7. Merge the verified sync branch back to `main`
+
+Once the sync branch is validated, merge it into `main` before cutting the release artifact:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git merge --no-ff <sync-branch>
+git push origin main
+```
+
+Recommended example:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git merge --no-ff chore/sync-upstream-$(date +%Y%m%d-%H%M%S)
+git push origin main
+```
+
+This ensures the DMG is built from the branch that actually represents the release line.
+
+---
+
+## 8. Build the new DMG
 
 ### Preferred one-command path
 
@@ -208,7 +232,7 @@ release/
 
 ---
 
-## 8. Post-build verification
+## 9. Post-build verification
 
 Confirm the new artifact exists:
 
@@ -226,7 +250,7 @@ If signing/notarization is part of your release flow, verify those outputs too.
 
 ---
 
-## 9. If you stashed changes earlier
+## 10. If you stashed changes earlier
 
 Restore them only after the sync/build is complete:
 
@@ -255,6 +279,10 @@ bun typecheck
 git add -A
 git commit -m "chore: sync fork with upstream"
 git push -u origin HEAD
+git checkout main
+git pull --ff-only origin main
+git merge --no-ff @{-1}
+git push origin main
 bun run push:dmg
 ```
 
