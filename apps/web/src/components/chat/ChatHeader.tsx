@@ -11,6 +11,7 @@ import GitActionsControl from "../GitActionsControl";
 import { type DraftId } from "~/composerDraftStore";
 import { DiffIcon, GitForkIcon, TerminalSquareIcon } from "lucide-react";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ProjectScriptsControl, { type NewProjectScriptInput } from "../ProjectScriptsControl";
 import { Toggle } from "../ui/toggle";
@@ -124,17 +125,16 @@ export const ChatHeader = memo(function ChatHeader({
         <Tooltip>
           <TooltipTrigger
             render={
-              <Toggle
+              <Button
                 className="shrink-0"
-                pressed={false}
-                onPressedChange={() => onForkChat()}
+                onClick={onForkChat}
                 aria-label="Fork chat"
                 variant="outline"
-                size="xs"
+                size="icon-xs"
                 disabled={forkDisabled}
               >
                 <GitForkIcon className="size-3" />
-              </Toggle>
+              </Button>
             }
           />
           <TooltipPopup side="bottom">
