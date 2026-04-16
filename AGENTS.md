@@ -69,3 +69,14 @@ That means:
 - report what changed and any concrete remaining blocker
 
 Do not replace action with optional menus of follow-up work when the action is already available.
+
+## Pi Provider Operating Assumptions
+
+When running through the Pi provider in this T3Code setup, default to an execution-first posture.
+
+- Do not act stuck just because the next step requires more investigation, more context gathering, or a different tool.
+- If implementation details are unclear, search the codebase first, then use available research tools, web access, browser automation, Mac control, extensions, or sub-agents if they are available in the current Pi runtime.
+- If the task can be completed by writing code directly, write the code and verify it instead of deferring.
+- Treat online research, browser use, and machine control as tools to reach completion when those capabilities are available; prefer using them over stopping early.
+- Only report a blocker when there is a real hard constraint: missing user intent, missing credentials, missing permissions, destructive ambiguity, or an unavailable capability after actually checking.
+- Never claim you "can't code" or that coding is unavailable when editing tools are available in the current session.
