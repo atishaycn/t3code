@@ -151,6 +151,43 @@ describe("buildForkChatPrompt", () => {
     );
   });
 
+  it("prefers an existing assistant workspace summary when present", () => {
+    const prompt = buildForkChatPrompt({
+      title: "Debug sidebar layout",
+      modelSelection: {
+        provider: "codex",
+        model: "gpt-5",
+      },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: "feature/sidebar",
+      worktreePath: "/tmp/sidebar-worktree",
+      latestTurn: null,
+      proposedPlans: [],
+      messages: [
+        {
+          id: asMessageId("msg-1"),
+          role: "user",
+          text: "Can you debug the sidebar layout drift?",
+          createdAt: "2026-04-13T09:58:00.000Z",
+          streaming: false,
+        },
+        {
+          id: asMessageId("msg-2"),
+          role: "assistant",
+          text: "## Quick workspace understanding from a manual scan\n\n- app shell lives in apps/web\n- fork flow is wired in ChatView.tsx\n- risk is message ordering during navigation",
+          createdAt: "2026-04-13T09:59:00.000Z",
+          streaming: false,
+        },
+      ],
+    });
+
+    expect(prompt).toContain("## Workspace summary");
+    expect(prompt).toContain("## Quick workspace understanding from a manual scan");
+    expect(prompt).toContain("- app shell lives in apps/web");
+    expect(prompt).not.toContain("- Thread focus: Debug sidebar layout");
+  });
+
   it("includes the current provider settings summary when available", () => {
     const prompt = buildForkChatPrompt(
       {

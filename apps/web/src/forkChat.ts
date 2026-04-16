@@ -55,6 +55,24 @@ function selectForkTranscriptMessages(messages: ReadonlyArray<ChatMessage>): Cha
   ];
 }
 
+function extractExistingWorkspaceSummary(messages: ReadonlyArray<ChatMessage>): string | null {
+  const candidate = [...messages]
+    .reverse()
+    .find(
+      (message) =>
+        message.role === "assistant" &&
+        /(?:^|\n)(?:#{1,6}\s*)?(?:quick\s+workspace\s+understanding|workspace\s+summary|repo(?:sitory)?\s+summary|project\s+summary)\b/i.test(
+          message.text,
+        ),
+    );
+
+  if (!candidate) {
+    return null;
+  }
+
+  return clipForkSection(candidate.text, 2_000);
+}
+
 function summarizeTranscriptMessages(messages: ReadonlyArray<ChatMessage>): string[] {
   const latestUserMessage = [...messages].reverse().find((message) => message.role === "user");
   const latestAssistantMessage = [...messages]
@@ -96,6 +114,11 @@ function buildForkWorkspaceSummary(input: {
   omittedMessageCount: number;
   latestPlan: Thread["proposedPlans"][number] | null;
 }): string {
+  const existingWorkspaceSummary = extractExistingWorkspaceSummary(input.thread.messages);
+  if (existingWorkspaceSummary) {
+    return existingWorkspaceSummary;
+  }
+
   const lines = [
     `- Thread focus: ${input.thread.title}`,
     ...summarizeTranscriptMessages(input.selectedMessages),
