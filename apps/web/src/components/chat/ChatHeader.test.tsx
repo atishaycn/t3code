@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ChatHeader } from "./ChatHeader";
 import { SidebarProvider } from "../ui/sidebar";
 
-function renderHeader() {
+function renderHeader(forkDisabled = false, forkDisabledReason = "Fork chat") {
   return renderToStaticMarkup(
     <SidebarProvider>
       <ChatHeader
@@ -24,8 +24,8 @@ function renderHeader() {
         diffToggleShortcutLabel={null}
         gitCwd={null}
         diffOpen={false}
-        forkDisabled={false}
-        forkDisabledReason="Fork chat"
+        forkDisabled={forkDisabled}
+        forkDisabledReason={forkDisabledReason}
         onRunProjectScript={() => undefined}
         onAddProjectScript={async () => undefined}
         onUpdateProjectScript={async () => undefined}
@@ -43,7 +43,17 @@ describe("ChatHeader fork action", () => {
     const html = renderHeader();
     const forkButtonMarkup = html.match(/<button[^>]*aria-label="Fork chat"[^>]*>/)?.[0] ?? "";
 
-    expect(forkButtonMarkup).toContain('data-slot="tooltip-trigger"');
+    expect(html).toContain('data-slot="tooltip-trigger"');
     expect(forkButtonMarkup).not.toContain("aria-pressed");
+  });
+
+  it("surfaces the disabled reason inline and on the tooltip trigger wrapper", () => {
+    const reason = "Wait for the current turn to finish before forking this chat.";
+    const html = renderHeader(true, reason);
+    const triggerWrapperMarkup = html.match(/<span[^>]*title="[^"]+"[^>]*>/)?.[0] ?? "";
+
+    expect(html).toContain(reason);
+    expect(triggerWrapperMarkup).toContain(`title="${reason}"`);
+    expect(html).toContain('aria-describedby="fork-chat-disabled-reason"');
   });
 });

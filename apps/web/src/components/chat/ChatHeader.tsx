@@ -123,24 +123,45 @@ export const ChatHeader = memo(function ChatHeader({
             {...(draftId ? { draftId } : {})}
           />
         )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                className={cn(buttonVariants({ variant: "outline", size: "icon-xs" }), "shrink-0")}
-                onClick={onForkChat}
-                aria-label="Fork chat"
-                disabled={forkDisabled}
-              >
-                <GitForkIcon className="size-3" />
-              </button>
-            }
-          />
-          <TooltipPopup side="bottom">
-            {forkDisabled ? forkDisabledReason : "Fork chat"}
-          </TooltipPopup>
-        </Tooltip>
+        <div className="flex items-center gap-2">
+          {forkDisabled ? (
+            <span className="hidden max-w-56 truncate text-xs text-muted-foreground @4xl/header-actions:inline">
+              {forkDisabledReason}
+            </span>
+          ) : null}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className="inline-flex shrink-0"
+                  title={forkDisabled ? forkDisabledReason : undefined}
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "icon-xs" }),
+                      "shrink-0",
+                    )}
+                    onClick={onForkChat}
+                    aria-label="Fork chat"
+                    disabled={forkDisabled}
+                    aria-describedby={forkDisabled ? "fork-chat-disabled-reason" : undefined}
+                  >
+                    <GitForkIcon className="size-3" />
+                  </button>
+                </span>
+              }
+            />
+            <TooltipPopup side="bottom">
+              {forkDisabled ? forkDisabledReason : "Fork chat"}
+            </TooltipPopup>
+          </Tooltip>
+          {forkDisabled ? (
+            <span id="fork-chat-disabled-reason" className="sr-only">
+              {forkDisabledReason}
+            </span>
+          ) : null}
+        </div>
         <Tooltip>
           <TooltipTrigger
             render={
