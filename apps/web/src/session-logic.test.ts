@@ -11,6 +11,7 @@ import {
   deriveCompletionDividerBeforeEntryId,
   deriveActiveWorkStartedAt,
   deriveActivePlanState,
+  deriveThreadActiveWorkState,
   PROVIDER_OPTIONS,
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -1259,6 +1260,42 @@ describe("hasToolActivityForTurn", () => {
 
     expect(hasToolActivityForTurn(activities, TurnId.make("turn-1"))).toBe(true);
     expect(hasToolActivityForTurn(activities, TurnId.make("turn-2"))).toBe(false);
+  });
+});
+
+describe("deriveThreadActiveWorkState", () => {
+  it("treats running orchestration with an active turn as working", () => {
+    expect(
+      deriveThreadActiveWorkState(
+        {
+          turnId: TurnId.make("turn-1"),
+          state: "running",
+          startedAt: "2026-03-09T10:00:01.000Z",
+          completedAt: null,
+        },
+        {
+          orchestrationStatus: "running",
+          activeTurnId: TurnId.make("turn-1"),
+        },
+      ),
+    ).toBe("working");
+  });
+
+  it("treats stale running orchestration with a completed latest turn as idle", () => {
+    expect(
+      deriveThreadActiveWorkState(
+        {
+          turnId: TurnId.make("turn-1"),
+          state: "completed",
+          startedAt: "2026-03-09T10:00:01.000Z",
+          completedAt: "2026-03-09T10:02:00.000Z",
+        },
+        {
+          orchestrationStatus: "running",
+          activeTurnId: undefined,
+        },
+      ),
+    ).toBeNull();
   });
 });
 

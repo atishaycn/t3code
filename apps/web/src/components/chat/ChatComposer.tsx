@@ -384,6 +384,7 @@ export interface ChatComposerProps {
 
   // Session phase
   phase: SessionPhase;
+  isActiveTurnRunning: boolean;
   isConnecting: boolean;
   isSendBusy: boolean;
   isPreparingWorktree: boolean;
@@ -490,6 +491,7 @@ export const ChatComposer = memo(
       isServerThread: _isServerThread,
       isLocalDraftThread: _isLocalDraftThread,
       phase,
+      isActiveTurnRunning,
       isConnecting,
       isSendBusy,
       isPreparingWorktree,
@@ -502,6 +504,7 @@ export const ChatComposer = memo(
       activePendingDraftAnswers,
       activePendingQuestionIndex,
       respondingRequestIds,
+      onQueuedPiFollowUpChange,
       showPlanFollowUpPrompt,
       activeProposedPlan,
       activePlan,
@@ -968,7 +971,7 @@ export const ChatComposer = memo(
       if (activePendingProgress) {
         return `pending:${activePendingProgress.questionIndex}:${activePendingProgress.isLastQuestion}:${activePendingIsResponding}`;
       }
-      if (phase === "running") {
+      if (isActiveTurnRunning) {
         return "running";
       }
       if (showPlanFollowUpPrompt) {
@@ -982,7 +985,7 @@ export const ChatComposer = memo(
       isConnecting,
       isPreparingWorktree,
       isSendBusy,
-      phase,
+      isActiveTurnRunning,
       prompt,
       showPlanFollowUpPrompt,
     ]);
@@ -1756,7 +1759,7 @@ export const ChatComposer = memo(
         try {
           messageId = randomUUID() as MessageId;
           if (streamingBehavior === "followUp") {
-            props.onQueuedPiFollowUpChange(messageId, true);
+            onQueuedPiFollowUpChange(messageId, true);
           }
           await ensureEnvironmentApi(environmentId).provider.sendPiThreadPrompt({
             threadId: activeThreadId,
@@ -1781,7 +1784,7 @@ export const ChatComposer = memo(
           void queryClient.invalidateQueries({ queryKey: piRuntimeQueryKey });
         } catch (error) {
           if (streamingBehavior === "followUp" && messageId) {
-            props.onQueuedPiFollowUpChange(messageId, false);
+            onQueuedPiFollowUpChange(messageId, false);
           }
           toastManager.add({
             type: "error",
@@ -1803,7 +1806,7 @@ export const ChatComposer = memo(
         isPiRuntimeThread,
         piRuntimeQueryKey,
         prompt,
-        props.onQueuedPiFollowUpChange,
+        onQueuedPiFollowUpChange,
         queryClient,
         scheduleComposerFocus,
         setComposerDraftPrompt,
@@ -2208,7 +2211,7 @@ export const ChatComposer = memo(
                     compact={isComposerPrimaryActionsCompact}
                     activeContextWindow={activeContextWindow}
                     pendingAction={pendingPrimaryAction}
-                    isRunning={phase === "running"}
+                    isRunning={isActiveTurnRunning}
                     isPiRuntimeThread={isPiRuntimeThread}
                     showPlanFollowUpPrompt={
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt

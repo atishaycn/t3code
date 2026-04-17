@@ -207,14 +207,16 @@ export function pinPendingMessagesToBottom(
   }));
 }
 
+export function isPiRuntimeActivelyWorking(state: PiRuntimeBusyState | null): boolean {
+  return Boolean(state && (state.isStreaming || state.pendingMessageCount > 0));
+}
+
+export function hasPiPendingPromptWork(state: PiRuntimeBusyState | null): boolean {
+  return Boolean(state && (state.queuedPrompts.length > 0 || state.steeringPrompts.length > 0));
+}
+
 export function isPiRuntimeBusy(state: PiRuntimeBusyState | null): boolean {
-  return Boolean(
-    state &&
-    (state.isStreaming ||
-      state.pendingMessageCount > 0 ||
-      state.queuedPrompts.length > 0 ||
-      state.steeringPrompts.length > 0),
-  );
+  return isPiRuntimeActivelyWorking(state) || hasPiPendingPromptWork(state);
 }
 
 export function reconcileVisiblePendingPiPromptMessages<TPendingMessage>(input: {
@@ -225,7 +227,7 @@ export function reconcileVisiblePendingPiPromptMessages<TPendingMessage>(input: 
   if (input.runtimePendingMessages.length > 0) {
     return [...input.runtimePendingMessages];
   }
-  if (isPiRuntimeBusy(input.runtimeState)) {
+  if (isPiRuntimeActivelyWorking(input.runtimeState)) {
     return [...input.previousVisibleMessages];
   }
   return [];

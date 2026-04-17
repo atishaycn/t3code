@@ -9,11 +9,13 @@ import {
   buildExpiredTerminalContextToastCopy,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
+  hasPiPendingPromptWork,
   hasServerAcknowledgedLocalDispatch,
+  isPiRuntimeActivelyWorking,
+  isPiRuntimeBusy,
   pinPendingMessagesToBottom,
   reconcileMountedTerminalThreadIds,
   reconcileVisiblePendingPiPromptMessages,
-  isPiRuntimeBusy,
   resolveSendEnvMode,
   shouldWriteThreadErrorToCurrentServerThread,
   waitForStartedServerThread,
@@ -125,10 +127,10 @@ describe("pinPendingMessagesToBottom", () => {
   });
 });
 
-describe("isPiRuntimeBusy", () => {
-  it("returns true while Pi has queued or in-flight work", () => {
+describe("Pi runtime work state", () => {
+  it("treats in-flight Pi activity as active work", () => {
     expect(
-      isPiRuntimeBusy({
+      isPiRuntimeActivelyWorking({
         isStreaming: false,
         pendingMessageCount: 1,
         queuedPrompts: [],
@@ -137,7 +139,19 @@ describe("isPiRuntimeBusy", () => {
     ).toBe(true);
   });
 
-  it("returns false when Pi is idle", () => {
+  it("does not treat queued-only Pi prompts as active work", () => {
+    const state = {
+      isStreaming: false,
+      pendingMessageCount: 0,
+      queuedPrompts: [{ id: "queued-1" }],
+      steeringPrompts: [],
+    };
+    expect(isPiRuntimeActivelyWorking(state)).toBe(false);
+    expect(hasPiPendingPromptWork(state)).toBe(true);
+    expect(isPiRuntimeBusy(state)).toBe(true);
+  });
+
+  it("returns false when Pi is fully idle", () => {
     expect(
       isPiRuntimeBusy({
         isStreaming: false,
@@ -172,6 +186,21 @@ describe("reconcileVisiblePendingPiPromptMessages", () => {
           isStreaming: false,
           pendingMessageCount: 0,
           queuedPrompts: [],
+          steeringPrompts: [],
+        },
+        runtimePendingMessages: [],
+        previousVisibleMessages: [{ id: "queued-1" }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not pin stale prompts when Pi only has queued prompt metadata left", () => {
+    expect(
+      reconcileVisiblePendingPiPromptMessages({
+        runtimeState: {
+          isStreaming: false,
+          pendingMessageCount: 0,
+          queuedPrompts: [{ id: "queued-1" }],
           steeringPrompts: [],
         },
         runtimePendingMessages: [],

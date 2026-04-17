@@ -12,7 +12,7 @@ import {
 } from "../lib/threadSort";
 import type { SidebarThreadSummary, Thread } from "../types";
 import { cn } from "../lib/utils";
-import { isLatestTurnSettled } from "../session-logic";
+import { deriveThreadActiveWorkState, isLatestTurnSettled } from "../session-logic";
 
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 100;
@@ -72,26 +72,9 @@ type ThreadStatusInput = Pick<
 export function isThreadActivelyWorking(
   thread: Pick<ThreadStatusInput, "latestTurn" | "session">,
 ): "working" | "connecting" | null {
-  const orchestrationStatus = thread.session?.orchestrationStatus;
-
-  if (orchestrationStatus === "starting") {
-    return "connecting";
-  }
-
-  if (orchestrationStatus === "running") {
-    if (thread.session?.activeTurnId != null) {
-      return "working";
-    }
-
-    if (thread.latestTurn?.state === "running") {
-      return "working";
-    }
-
-    if (!thread.latestTurn?.completedAt) {
-      return "working";
-    }
-
-    return null;
+  const activeWorkState = deriveThreadActiveWorkState(thread.latestTurn, thread.session);
+  if (activeWorkState !== null) {
+    return activeWorkState;
   }
 
   if (thread.session?.status === "connecting") {

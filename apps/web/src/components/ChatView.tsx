@@ -55,6 +55,7 @@ import {
   deriveTimelineEntries,
   deriveActiveWorkStartedAt,
   deriveActivePlanState,
+  deriveThreadActiveWorkState,
   findSidebarProposedPlan,
   findLatestProposedPlan,
   deriveWorkLogEntries,
@@ -160,6 +161,7 @@ import {
   createLocalDispatchSnapshot,
   deriveComposerSendState,
   hasServerAcknowledgedLocalDispatch,
+  isPiRuntimeActivelyWorking,
   isPiRuntimeBusy,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
@@ -1160,13 +1162,18 @@ export default function ChatView(props: ChatViewProps) {
     activePendingUserInput: activePendingUserInput?.requestId ?? null,
     threadError: activeThread?.error,
   });
-  const piRuntimeBusy = isPiRuntimeBusy(piRuntimeQuery.data?.state ?? null);
-  const isWorking =
-    phase === "running" ||
+  const activeWorkState = deriveThreadActiveWorkState(
+    activeLatestTurn,
+    activeThread?.session ?? null,
+  );
+  const piRuntimeState = piRuntimeQuery.data?.state ?? null;
+  const piRuntimeActivelyWorking = isPiRuntimeActivelyWorking(piRuntimeState);
+  const isActiveTurnRunning =
+    activeWorkState === "working" ||
     isSendBusy ||
-    isConnecting ||
     isRevertingCheckpoint ||
-    (isPiRuntimeThread && piRuntimeBusy);
+    (isPiRuntimeThread && piRuntimeActivelyWorking);
+  const isWorking = isActiveTurnRunning || isConnecting;
   const forkChatDisabledReason = !isServerThread
     ? "Forking is unavailable until this draft thread is created."
     : !threadHasStarted(activeThread)
@@ -2429,7 +2436,7 @@ export default function ChatView(props: ChatViewProps) {
       const localApi = readLocalApi();
       if (!api || !localApi || !activeThread || isRevertingCheckpoint) return;
 
-      if (phase === "running" || isSendBusy || isConnecting) {
+      if (isActiveTurnRunning || isConnecting) {
         setThreadError(activeThread.id, "Interrupt the current turn before reverting checkpoints.");
         return;
       }
@@ -2465,10 +2472,9 @@ export default function ChatView(props: ChatViewProps) {
     [
       activeThread,
       environmentId,
+      isActiveTurnRunning,
       isConnecting,
       isRevertingCheckpoint,
-      isSendBusy,
-      phase,
       setThreadError,
     ],
   );
@@ -3588,7 +3594,7 @@ export default function ChatView(props: ChatViewProps) {
             <MessagesTimeline
               key={activeThread.id}
               isWorking={isWorking}
-              activeTurnInProgress={isWorking || !latestTurnSettled}
+              activeTurnInProgress={isActiveTurnRunning || !latestTurnSettled}
               activeTurnId={activeLatestTurn?.turnId ?? null}
               activeTurnStartedAt={activeWorkStartedAt}
               listRef={legendListRef}
@@ -3645,6 +3651,7 @@ export default function ChatView(props: ChatViewProps) {
               isServerThread={isServerThread}
               isLocalDraftThread={isLocalDraftThread}
               phase={phase}
+              isActiveTurnRunning={isActiveTurnRunning}
               isConnecting={isConnecting}
               isSendBusy={isSendBusy}
               isPreparingWorktree={isPreparingWorktree}
