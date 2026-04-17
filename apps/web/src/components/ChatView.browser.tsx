@@ -4148,6 +4148,46 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
+  it("opens the project Next sheet from the sidebar and persists todo items", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-project-next-sheet-test" as MessageId,
+        targetText: "project next sheet test",
+      }),
+    });
+
+    try {
+      const nextButton = page.getByTestId("project-next-button");
+      await expect.element(nextButton).toBeInTheDocument();
+
+      await nextButton.click();
+      await expect.element(page.getByTestId("project-next-sheet")).toBeInTheDocument();
+
+      await page.getByTestId("project-next-input").fill("Tighten sidebar todo UX");
+      await page.getByRole("button", { name: "Add" }).click();
+
+      await expect
+        .element(page.getByText("Tighten sidebar todo UX", { exact: true }))
+        .toBeInTheDocument();
+
+      await page.getByLabelText("Close next list").click();
+      await vi.waitFor(
+        () => {
+          expect(document.querySelector('[data-testid="project-next-sheet"]')).toBeNull();
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      await nextButton.click();
+      await expect
+        .element(page.getByText("Tighten sidebar todo UX", { exact: true }))
+        .toBeInTheDocument();
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
   it("does not consume chat.new when there is no project context", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,

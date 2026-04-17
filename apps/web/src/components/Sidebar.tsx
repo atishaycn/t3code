@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   CloudIcon,
   GitPullRequestIcon,
+  ListTodoIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
@@ -154,6 +155,7 @@ import {
   useSavedEnvironmentRuntimeStore,
 } from "../environments/runtime";
 import type { Project, SidebarThreadSummary } from "../types";
+import { ProjectNextSheet } from "./ProjectNextSheet";
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
@@ -1039,6 +1041,7 @@ interface SidebarProjectItemProps {
   isThreadListExpanded: boolean;
   activeRouteThreadKey: string | null;
   newThreadShortcutLabel: string | null;
+  onOpenProjectNext: (project: SidebarProjectSnapshot) => void;
   handleNewThread: ReturnType<typeof useNewThreadHandler>["handleNewThread"];
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
   setThreadPinned: ReturnType<typeof useThreadActions>["setThreadPinned"];
@@ -1060,6 +1063,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     isThreadListExpanded,
     activeRouteThreadKey,
     newThreadShortcutLabel,
+    onOpenProjectNext,
     handleNewThread,
     archiveThread,
     setThreadPinned,
@@ -1645,6 +1649,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     [defaultThreadEnvMode, handleNewThread, project.environmentId, project.id, router],
   );
 
+  const handleOpenProjectNextClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onOpenProjectNext(project);
+    },
+    [onOpenProjectNext, project],
+  );
+
   const attemptArchiveThread = useCallback(
     async (threadRef: ScopedThreadRef) => {
       try {
@@ -1850,26 +1863,42 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             </TooltipPopup>
           </Tooltip>
         )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <div className="pointer-events-none absolute top-1 right-1.5 opacity-0 transition-opacity duration-150 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100">
+        <div className="pointer-events-none absolute top-1 right-1.5 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Open next list for ${project.name}`}
+                  data-testid="project-next-button"
+                  className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 hover:bg-secondary hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                  onClick={handleOpenProjectNextClick}
+                />
+              }
+            >
+              <ListTodoIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipPopup side="top">Next</TooltipPopup>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
                 <button
                   type="button"
                   aria-label={`Create new thread in ${project.name}`}
                   data-testid="new-thread-button"
                   className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 hover:bg-secondary hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                   onClick={handleCreateThreadClick}
-                >
-                  <SquarePenIcon className="size-3.5" />
-                </button>
-              </div>
-            }
-          />
-          <TooltipPopup side="top">
-            {newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : "New thread"}
-          </TooltipPopup>
-        </Tooltip>
+                />
+              }
+            >
+              <SquarePenIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipPopup side="top">
+              {newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : "New thread"}
+            </TooltipPopup>
+          </Tooltip>
+        </div>
       </div>
 
       <SidebarProjectThreadList
@@ -2508,6 +2537,7 @@ interface SidebarProjectsContentProps {
   handleProjectDragStart: (event: DragStartEvent) => void;
   handleProjectDragEnd: (event: DragEndEvent) => void;
   handleProjectDragCancel: (event: DragCancelEvent) => void;
+  onOpenProjectNext: (project: SidebarProjectSnapshot) => void;
   handleNewThread: ReturnType<typeof useNewThreadHandler>["handleNewThread"];
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
   setThreadPinned: ReturnType<typeof useThreadActions>["setThreadPinned"];
@@ -2552,6 +2582,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     handleProjectDragStart,
     handleProjectDragEnd,
     handleProjectDragCancel,
+    onOpenProjectNext,
     handleNewThread,
     archiveThread,
     setThreadPinned,
@@ -2709,6 +2740,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                           activeRouteProjectKey === project.projectKey ? routeThreadKey : null
                         }
                         newThreadShortcutLabel={newThreadShortcutLabel}
+                        onOpenProjectNext={onOpenProjectNext}
                         handleNewThread={handleNewThread}
                         archiveThread={archiveThread}
                         setThreadPinned={setThreadPinned}
@@ -2742,6 +2774,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                   activeRouteProjectKey === project.projectKey ? routeThreadKey : null
                 }
                 newThreadShortcutLabel={newThreadShortcutLabel}
+                onOpenProjectNext={onOpenProjectNext}
                 handleNewThread={handleNewThread}
                 archiveThread={archiveThread}
                 setThreadPinned={setThreadPinned}
@@ -2791,6 +2824,7 @@ export default function Sidebar() {
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
   const keybindings = useServerKeybindings();
   const openAddProjectCommandPalette = useCommandPaletteStore((store) => store.openAddProject);
+  const [nextProjectSheetProjectKey, setNextProjectSheetProjectKey] = useState<string | null>(null);
   const [expandedThreadListsByProject, setExpandedThreadListsByProject] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -3511,6 +3545,23 @@ export default function Sidebar() {
     });
   }, []);
 
+  const openProjectNext = useCallback((project: SidebarProjectSnapshot) => {
+    setNextProjectSheetProjectKey(project.projectKey);
+  }, []);
+
+  const closeProjectNext = useCallback(() => {
+    setNextProjectSheetProjectKey(null);
+  }, []);
+
+  const nextProjectSheetProject = useMemo(
+    () =>
+      nextProjectSheetProjectKey
+        ? (sortedProjects.find((project) => project.projectKey === nextProjectSheetProjectKey) ??
+          null)
+        : null,
+    [nextProjectSheetProjectKey, sortedProjects],
+  );
+
   return (
     <>
       <SidebarChromeHeader isElectron={isElectron} />
@@ -3535,6 +3586,7 @@ export default function Sidebar() {
             handleProjectDragStart={handleProjectDragStart}
             handleProjectDragEnd={handleProjectDragEnd}
             handleProjectDragCancel={handleProjectDragCancel}
+            onOpenProjectNext={openProjectNext}
             handleNewThread={handleNewThread}
             archiveThread={archiveThread}
             setThreadPinned={setThreadPinned}
@@ -3562,6 +3614,14 @@ export default function Sidebar() {
 
           <SidebarSeparator />
           <SidebarChromeFooter />
+          {nextProjectSheetProject ? (
+            <ProjectNextSheet
+              open
+              projectKey={nextProjectSheetProject.projectKey}
+              projectName={nextProjectSheetProject.name}
+              onClose={closeProjectNext}
+            />
+          ) : null}
         </>
       )}
     </>
