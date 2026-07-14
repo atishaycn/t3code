@@ -6,7 +6,7 @@
   "contractId": "",
   "repo": "",
   "worktreeScope": [],
-  "baseline": {"ref": "", "sha256": ""},
+  "baseline": { "ref": "", "sha256": "" },
   "allowedTools": [],
   "inputs": [],
   "outputs": [],
