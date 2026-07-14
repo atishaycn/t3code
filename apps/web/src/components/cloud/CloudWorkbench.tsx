@@ -5,7 +5,8 @@ import { useMemo, useState } from "react";
 import { AgentCloud } from "./AgentCloud";
 import { ProjectCloudSpace } from "./ProjectCloudSpace";
 import { WorkflowSurface } from "./surfaces/WorkflowSurface";
-import type { AgentRecord, AgentStatus, CodexProjectSummary } from "../../cloud/types";
+import { projectUnboundThread } from "../../cloud/cloudProjector";
+import type { AgentRecord, CodexProjectSummary } from "../../cloud/types";
 import "../../cloud/cloud.css";
 import { SidebarInset } from "../ui/sidebar";
 import { useProjects, useThreadShells } from "../../state/entities";
@@ -19,15 +20,6 @@ const surfaceNav = [
 ] as const;
 
 type Surface = (typeof surfaceNav)[number][0];
-
-function agentStatus(thread: ReturnType<typeof useThreadShells>[number]): AgentStatus {
-  if (thread.hasPendingApprovals || thread.hasPendingUserInput) return "waiting";
-  if (thread.latestTurn?.state === "running") return "running";
-  if (thread.latestTurn?.state === "error") return "failed";
-  if (thread.latestTurn?.state === "interrupted") return "interrupted";
-  if (thread.latestTurn?.state === "completed") return "completed";
-  return "idle";
-}
 
 export function CloudWorkbench() {
   const navigate = useNavigate();
@@ -44,7 +36,7 @@ export function CloudWorkbench() {
         name: project.title,
         threads: threads
           .filter((thread) => thread.projectId === project.id)
-          .map((thread, index) => ({
+          .map((thread) => ({
             id: thread.id,
             projectPath: project.workspaceRoot,
             name: thread.title,
@@ -56,10 +48,9 @@ export function CloudWorkbench() {
             status: thread.latestTurn?.state === "running" ? "active" : "idle",
             modelProvider: thread.modelSelection.instanceId,
             updatedAt: thread.updatedAt,
-            parentThreadId:
-              index === 0
-                ? null
-                : (threads.find((item) => item.projectId === project.id)?.id ?? null),
+            // Canonical t3 threads are independent until the cloud domain supplies
+            // an explicit, durable parent/child workflow binding.
+            parentThreadId: null,
           })),
       })),
     [projects, threads],
@@ -72,34 +63,32 @@ export function CloudWorkbench() {
   const projectThreads = selectedProject
     ? threads.filter((thread) => thread.projectId === selectedProject.id)
     : [];
-  const rootThread = projectThreads[0] ?? null;
   const agents = useMemo<AgentRecord[]>(
-    () =>
-      projectThreads.map((thread, index) => ({
-        threadId: thread.id,
-        parentThreadId: index === 0 ? null : (rootThread?.id ?? null),
-        name: thread.title,
-        role: index === 0 ? "orchestrator" : "worker",
-        status: agentStatus(thread),
-        model: thread.modelSelection.model,
-        currentTurnId: thread.latestTurn?.turnId ?? null,
-        runId: null,
-        lastMessage: "",
-        activity: thread.hasPendingApprovals
-          ? "Approval required"
-          : thread.hasPendingUserInput
-            ? "Waiting for input"
-            : thread.latestTurn?.state === "running"
-              ? "Working through the current turn"
-              : thread.latestTurn?.state === "error"
-                ? "The last turn failed"
-                : "Ready",
-        updatedAt: thread.updatedAt,
-      })),
-    [projectThreads, rootThread?.id],
+    () => projectThreads.map(projectUnboundThread),
+    [projectThreads],
   );
-  const rootAgent = agents[0] ?? null;
-  const workers = agents.slice(1);
+  const rootAgent = useMemo<AgentRecord | null>(
+    () =>
+      selectedProject
+        ? {
+            threadId: `cloud:${selectedProject.id}`,
+            parentThreadId: null,
+            name: "Workflow orchestrator",
+            role: "orchestrator",
+            status: "idle",
+            model: null,
+            currentTurnId: null,
+            runId: null,
+            lastMessage: "",
+            activity: "No governed workflow run is active",
+            updatedAt: selectedProject.updatedAt,
+          }
+        : null,
+    [selectedProject],
+  );
+  // Do not fabricate worker relationships from unrelated t3 threads. Workers
+  // appear here only after the cloud backend supplies explicit bindings.
+  const workers: AgentRecord[] = [];
   const selectedAgent = agents.find((agent) => agent.threadId === selectedThreadId) ?? rootAgent;
   const activeCount = agents.filter((agent) =>
     ["planning", "running", "verifying"].includes(agent.status),
@@ -142,7 +131,8 @@ export function CloudWorkbench() {
   }
 
   const renderSurface = () => {
-    if (surface === "workflow") return <WorkflowSurface />;
+    if (surface === "workflow")
+      return <WorkflowSurface projectName={selectedProject.title} threadCount={agents.length} />;
     if (surface === "inbox") {
       const waiting = agents.filter((agent) => agent.status === "waiting");
       return (
@@ -334,6 +324,29 @@ export function CloudWorkbench() {
                 </div>
               )}
             </div>
+            <section className="surface-card" aria-label="Unbound provider threads">
+              <span className="eyebrow">Canonical t3 threads</span>
+              <h2>Available sessions</h2>
+              <p>
+                These threads remain independent until a governed workflow creates explicit
+                parent/child bindings.
+              </p>
+              {agents.length === 0 ? (
+                <p>No provider threads exist for this project yet.</p>
+              ) : (
+                agents.map((agent) => (
+                  <button
+                    type="button"
+                    className="surface-list-row"
+                    key={agent.threadId}
+                    onClick={() => setSelectedThreadId(agent.threadId)}
+                  >
+                    <strong>{agent.name}</strong>
+                    <span>{agent.activity}</span>
+                  </button>
+                ))
+              )}
+            </section>
           </div>
           <aside className="inspector">
             <div className="inspector-tabs">
@@ -361,22 +374,26 @@ export function CloudWorkbench() {
                       <dd>{selectedAgent.model ?? "Default"}</dd>
                     </div>
                   </dl>
-                  <button
-                    className="primary-action"
-                    onClick={() =>
-                      void navigate({
-                        to: "/$environmentId/$threadId",
-                        params: {
-                          environmentId:
-                            projectThreads.find((thread) => thread.id === selectedAgent.threadId)
-                              ?.environmentId ?? projectThreads[0]!.environmentId,
-                          threadId: selectedAgent.threadId,
-                        },
-                      })
-                    }
-                  >
-                    Open thread
-                  </button>
+                  {projectThreads.some((thread) => thread.id === selectedAgent.threadId) && (
+                    <button
+                      className="primary-action"
+                      onClick={() => {
+                        const thread = projectThreads.find(
+                          (candidate) => candidate.id === selectedAgent.threadId,
+                        );
+                        if (!thread) return;
+                        void navigate({
+                          to: "/$environmentId/$threadId",
+                          params: {
+                            environmentId: thread.environmentId,
+                            threadId: thread.id,
+                          },
+                        });
+                      }}
+                    >
+                      Open thread
+                    </button>
+                  )}
                 </>
               ) : (
                 <p>Select an agent to inspect its work.</p>
