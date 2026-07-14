@@ -66,7 +66,9 @@ export function CloudWorkbench() {
   );
 
   const selectedProject =
-    projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
+    selectedProjectId === null
+      ? null
+      : (projects.find((project) => project.id === selectedProjectId) ?? null);
   const projectThreads = selectedProject
     ? threads.filter((thread) => thread.projectId === selectedProject.id)
     : [];
