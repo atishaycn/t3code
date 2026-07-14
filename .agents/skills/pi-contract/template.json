@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "contractId": "",
+  "owner": "",
+  "objective": "",
+  "repo": "",
+  "worktreeScope": [],
+  "baseline": {"ref": "", "sha256": ""},
+  "allowedTools": [],
+  "inputs": [],
+  "outputs": [],
+  "reviewer": "",
+  "assumptions": [],
+  "blockedDecisions": [],
+  "dependencies": [],
+  "outputSchema": {},
+  "timeouts": {"runSeconds": 0, "stepSeconds": 0},
+  "reportingRoute": "",
+  "hashes": {},
+  "gates": [],
+  "evidence": []
+}
